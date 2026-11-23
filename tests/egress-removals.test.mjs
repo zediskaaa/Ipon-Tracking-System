@@ -16,7 +16,7 @@ test('1. Super Admin removes Realtime/polling refreshes while preserving manual 
   assert.doesNotMatch(saJs, /subscribeToChanges\(/);
   assert.doesNotMatch(saJs, /\bsetInterval\s*\(/);
   assert.doesNotMatch(saJs, /scheduledAwardAutoTimer|scheduleNextScheduledAwardTick/);
-  assert.match(coreJs, /if \(!client \|\| !profile\?\.id \|\| profile\.role === 'SUPER_ADMIN'\) return;/);
+  assert.doesNotMatch(coreJs, /initPresence|ipon-active-presence/);
 
   // Super Admin loads on initial open, panel switch (hashchange), action success, and explicit Refresh button click
   assert.match(saJs, /window\.addEventListener\('hashchange',\s*async \(\) => \{\s*showView\(true\);\s*await refresh\(\{ showGlobalLoader: true \}\);\s*\}\);/);
@@ -107,9 +107,8 @@ test('3. Gemini AI integration is completely removed across UI, client, Edge Fun
   assert.match(read('login.html'), /clerk/i);
 });
 
-test('4. Online/Last Seen heartbeat and indicators are removed while chat messaging, typing, receipts, and Migration 185 remain intact', () => {
+test('4. Online/Last Seen heartbeat, presence indicators, and chat system are removed while Migration 185 remains intact', () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
   const heroPlates = read('css/hero-plates.css');
   const recordsJs = read('js/records.js');
@@ -117,7 +116,6 @@ test('4. Online/Last Seen heartbeat and indicators are removed while chat messag
 
   for (const [label, txt] of [
     ['js/core.js', coreJs],
-    ['js/messages.js', messagesJs],
     ['js/records.js', recordsJs],
     ['js/requests.js', requestsJs],
     ['css/app.css', css],
@@ -126,14 +124,8 @@ test('4. Online/Last Seen heartbeat and indicators are removed while chat messag
     assert.doesNotMatch(txt, /touch_user_last_seen|presence-dot|syncPresenceDots|isUserOnline|onlineUserIds|setOnlineVisibility/, `${label} must not contain heartbeat or presence-dot code`);
   }
 
-  // Preserved chat features: typing broadcast, delivery/read receipts, active-convo presence, screenshot protection
-  assert.match(messagesJs, /mark_messages_delivered/);
-  assert.match(messagesJs, /mark_conversation_read/);
-  assert.match(messagesJs, /sendTypingBroadcast/);
-  assert.match(messagesJs, /name="read_receipts"/);
-  assert.doesNotMatch(messagesJs, /name="show_online"|name="show_last_seen"/);
-  assert.match(coreJs, /hasLiveBrowserSession/);
-  assert.match(coreJs, /refreshPeerClientPlatforms/);
+  assert.equal(fs.existsSync(path.join(process.cwd(), 'js', 'messages.js')), false, 'js/messages.js must be removed');
+  assert.doesNotMatch(coreJs, /hasLiveBrowserSession|refreshPeerClientPlatforms|initPresence/);
 
   // Migration 185 remains untouched in migrations and schema.sql
   assert.equal(fs.existsSync(path.join(process.cwd(), 'database', 'migrations', '20261123_185_avoid_redundant_creator_effect_writes.sql')), true);

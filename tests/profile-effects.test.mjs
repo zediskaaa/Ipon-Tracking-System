@@ -283,9 +283,8 @@ test('migration 117 enforces permanent Super Admin grants with zero retention ex
   assert.match(sql, /'profile_effect', coalesce\(v_profile\.equipped_profile_effect, 'none'\)/);
 });
 
-test('profile card swatch fix, cover upload hardening, Super Admin effects tab, celebration modal, and popover integration are complete', () => {
+test('profile card swatch fix, cover upload hardening, Super Admin effects tab, and celebration modal are complete', () => {
   const core = read('js/core.js');
-  const messages = read('js/messages.js');
   const superAdminJs = read('js/super-admin.js');
   const superAdminHtml = read('super-admin.html');
   const css = read('css/app.css');
@@ -332,15 +331,8 @@ test('profile card swatch fix, cover upload hardening, Super Admin effects tab, 
   assert.match(core, /equip_own_profile_effect/);
   assert.match(css, /@media \(max-width: 900px\)\s*\{[\s\S]*?\.effects-side\s*\{\s*display:\s*contents;/);
   assert.match(css, /\.effect-trial-req-dialog\s*\{/);
-  assert.match(messages, /window\.IponProfileEffects/);
-  assert.match(messages, /profileEffectStage\?\.destroy/);
-  assert.match(messages, /profileAppearanceCache/);
-  assert.match(messages, /function applyProfileCardAppearance\(/);
-  assert.match(messages, /Promise\.all\(\[\s*ipon\(\)\.rpc\('get_social_user_profile'/);
   assert.match(css, /\.effects-gallery-dialog\s*\{/);
   assert.match(css, /\.effect-celebrate-hero\s*\{/);
-  assert.match(css, /\.msg-profile-popover\[data-card-theme="midnight"\]/);
-  assert.match(css, /\.msg-profile-popover\[data-card-theme\],\s*html\[data-theme="dark"\]\s+\.msg-profile-popover\[data-card-theme\]\s*\{/);
   assert.match(superAdminHtml, /id="effects-subtabs"/);
   assert.match(superAdminHtml, /id="effect-trial-approve-dialog"/);
   assert.match(superAdminHtml, /id="effect-trial-reject-dialog"/);
@@ -938,7 +930,6 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   const mig120 = read('database/migrations/20261118_120_breadspanish_all_effects.sql');
   const mig121 = read('database/migrations/20261118_121_restrict_creator_all_effects.sql');
   const saJs = read('js/super-admin.js');
-  const msgJs = read('js/messages.js');
   const appCss = read('css/app.css');
   assert.match(mig119, /super_admin_grant_profile_effects\([^)]*p_duration_days integer default null,\s*p_expires_at timestamptz default null/i);
   assert.match(mig119, /'is_permanent',\s*v_is_permanent/);
@@ -954,7 +945,6 @@ test('migration 118 and runtime enforce 1-per-effect trials, 1-month cooldown, a
   assert.match(appCss, /\.account-profile-card>\.account-dialog-close\{[^}]*width:28px;height:28px;flex:0 0 28px;aspect-ratio:1 \/ 1;[^}]*border-radius:50%/);
   assert.match(appCss, /\.account-profile-identity strong\{[^}]*white-space:normal;/);
   assert.doesNotMatch(appCss, /\.msg-welcome-avatar \.presence-dot/);
-  assert.match(msgJs, /avatar-presence-wrap msg-avatar-wrap\$\{wrapCls/);
 });
 
 test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG logos, and bio redirect links validate safely', () => {
@@ -963,7 +953,6 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   const mig124 = read('database/migrations/20261118_124_social_app_x.sql');
   const schema = read('database/schema.sql');
   const coreJs = read('js/core.js');
-  const msgJs = read('js/messages.js');
   const appCss = read('css/app.css');
   const effectsJs = read('js/profile-effects.js');
 
@@ -1000,9 +989,6 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   assert.match(coreJs, /bindConnectAppsPreviewDrag/);
   assert.match(coreJs, /serializeSocialLinks\(check\.normalized,\s*modalAppsOrder\)/);
   assert.match(coreJs, /rpc\('update_own_social_links',\s*\{\s*p_links:\s*payload\s*\}/);
-  assert.match(msgJs, /class="msg-pop-apps-slot"/);
-  assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'welcome'\s*\}\)/);
-  assert.match(msgJs, /renderSocialAppLinksHtml\?\.\(conv\.social_links,\s*\{\s*variant:\s*'drawer'\s*\}\)/);
   assert.match(appCss, /\.social-apps-strip\s*\{[^}]*display:\s*flex;/);
   assert.match(appCss, /\.social-app-tile\s*\{[^}]*width:\s*24px;\s*height:\s*24px;[^}]*border-radius:\s*7px;/);
   assert.match(appCss, /button\.social-app-tile\.is-draggable\s*\{[^}]*touch-action:\s*none;/);
@@ -1229,19 +1215,17 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   }
   assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
-  assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
-  assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v260/);
+  assert.match(sw, /ipon-shell-v261/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);
   for (const file of ['dashboard.html', 'account.html', 'super-admin.html', 'settings.html']) {
     const html = read(file);
-    assert.match(html, /js\/profile-effects\.js\?v=20261123-04/);
+    assert.match(html, /js\/profile-effects\.js\?v=20261123-05/);
     assert.match(html, /js\/profile-effects-sfx\.js\?v=20261123-03/);
     assert.match(html, /js\/profile-effects-exclusive\.js\?v=20261122-07/);
-    assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-05/);
-    assert.match(html, /css\/app\.css\?v=20261123-19/);
+    assert.match(html, /js\/profile-effects-creator\.js\?v=20261123-06/);
+    assert.match(html, /css\/app\.css\?v=20261123-20/);
   }
 });
 
@@ -1331,7 +1315,7 @@ test('Divine effects can be equipped but cannot create a trial request or notify
   for (const file of fs.readdirSync(root).filter((entry) => entry.endsWith('.html'))) {
     const html = read(file);
     if (!html.includes('js/profile-effects-exclusive.js')) continue;
-    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/profile-effects-creator\.js\?v=20261123-05"><\/script>\s*<script src="js\/core\.js/);
+    assert.match(html, /js\/profile-effects-exclusive\.js[^<]*<\/script>\s*<script src="js\/profile-effects-divine\.js\?v=20261122-02"><\/script>\s*<script src="js\/profile-effects-deluxe\.js\?v=20261122-01"><\/script>\s*<script src="js\/profile-effects-creator\.js\?v=20261123-06"><\/script>\s*<script src="js\/core\.js/);
   }
   assert.match(read('sw.js'), /'js\/profile-effects-divine\.js'/);
 });

@@ -336,13 +336,13 @@
     const hr = host.getBoundingClientRect();
     if (!hr || !hr.width || !hr.height) return fallback;
 
-    const bannerEl = host.querySelector('.effects-banner, .msg-pop-cover');
+    const bannerEl = host.querySelector('.effects-banner');
     if (bannerEl && typeof bannerEl.getBoundingClientRect === 'function') {
       const br = bannerEl.getBoundingClientRect();
       if (br.height > 16) fallback.bannerH = clamp(br.height, 40, H * 0.5);
     }
 
-    const badgeEl = host.querySelector('.verified-badges-inline, .effects-card-name, .msg-pop-title strong');
+    const badgeEl = host.querySelector('.verified-badges-inline, .effects-card-name');
     if (badgeEl && typeof badgeEl.getBoundingClientRect === 'function') {
       const br = badgeEl.getBoundingClientRect();
       if (br.width > 4 && br.height > 4) {
@@ -356,7 +356,7 @@
       }
     }
 
-    const grpEl = host.querySelector('.effects-card-groups, .msg-pop-groups, .msg-pop-actions');
+    const grpEl = host.querySelector('.effects-card-groups');
     if (grpEl && typeof grpEl.getBoundingClientRect === 'function') {
       const gr = grpEl.getBoundingClientRect();
       if (gr.width > 30 && gr.height > 20) {

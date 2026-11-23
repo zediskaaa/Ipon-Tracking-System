@@ -4040,7 +4040,7 @@
       frontCanvas = document.createElement('canvas');
       frontCanvas.className = 'fxf';
       frontCanvas.setAttribute('aria-hidden', 'true');
-      const cover = host.querySelector('.banner, .msg-pop-cover');
+      const cover = host.querySelector('.banner');
       if (cover && cover.parentElement === host) cover.insertAdjacentElement('afterend', frontCanvas);
       else host.appendChild(frontCanvas);
       createdFront = true;
@@ -4123,7 +4123,7 @@
         this.bc.clearRect(0, 0, W, H);
         this.fc.clearRect(0, 0, W, H);
         const g = this.geom(W, H) || { cx: W / 2, cy: H / 2, ra: 30 };
-        const full = isFull && (Boolean(this.host?.classList?.contains?.('effects-card') || this.host?.classList?.contains?.('msg-profile-popover')) || H >= W * 0.92);
+        const full = isFull && (Boolean(this.host?.classList?.contains?.('effects-card')) || H >= W * 0.92);
         const s = Math.max(0.35, g.ra / 36);
         this.S = {
           W, H, ...g, s, full, b: this.bc, f: this.fc, host: this.host,

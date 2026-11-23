@@ -324,8 +324,8 @@ test('DP cover-clipping root cause is eliminated (zero mask-image on card body/p
   // 1. Root-cause fix: NO mask-image clipping on creator card children, explicit z-index & overflow: visible so entire DP is visible!
   const creatorCssBlock = css.slice(css.indexOf('/* Creator-Exclusive Sci-Fi Holographic Profile Effect'));
   assert.doesNotMatch(creatorCssBlock, /mask-image\s*:/, 'Creator CSS must NOT apply mask-image to card body (that clips negative-margin DP)');
-  assert.match(creatorCssBlock, /:is\(\.effects-card, \.msg-profile-popover\)\[data-effect-family="creator"\] > :is\(\.effects-banner, \.msg-pop-cover\)\s*\{[^}]*position:\s*relative;\s*z-index:\s*0;/s);
-  assert.match(creatorCssBlock, /:is\(\.effects-card, \.msg-profile-popover\)\[data-effect-family="creator"\] > :not\(canvas\):not\(\.effects-banner\):not\(\.msg-pop-cover\):not\(\.msg-pop-close\)\s*\{[^}]*position:\s*relative;\s*z-index:\s*3;\s*overflow:\s*visible;/s);
+  assert.match(creatorCssBlock, /\.effects-card\[data-effect-family="creator"\] > \.effects-banner\s*\{[^}]*position:\s*relative;\s*z-index:\s*0;/s);
+  assert.match(creatorCssBlock, /\.effects-card\[data-effect-family="creator"\] > :not\(canvas\):not\(\.effects-banner\)\s*\{[^}]*position:\s*relative;\s*z-index:\s*3;\s*overflow:\s*visible;/s);
   assert.match(creatorCssBlock, /\.effects-card\[data-effect-family="creator"\] \.effects-card-avatar\s*\{[^}]*position:\s*relative;\s*z-index:\s*4;/s);
   assert.match(creatorCssBlock, /\.pfx-cinema-canvas\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*pointer-events:\s*none;/s);
 

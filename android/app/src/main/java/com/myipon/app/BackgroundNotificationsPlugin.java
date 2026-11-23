@@ -10,7 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -29,19 +28,14 @@ import android.util.Base64;
 import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
 import android.webkit.WebView;
-import android.view.WindowManager;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
-import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.Permission;
-import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -58,15 +52,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.json.JSONObject;
 
-@CapacitorPlugin(
-    name = "BackgroundNotifications",
-    permissions = {
-        @Permission(
-            strings = { Manifest.permission.RECORD_AUDIO, Manifest.permission.MODIFY_AUDIO_SETTINGS },
-            alias = "microphone"
-        )
-    }
-)
+@CapacitorPlugin(name = "BackgroundNotifications")
 public class BackgroundNotificationsPlugin extends Plugin {
     private static final String APP_UPDATE_MANIFEST_URL = "https://github.com/zediskaaa/Ipon-Tracking-System/releases/latest/download/app-update.json";
     private static final String APP_UPDATE_ALLOWED_PREFIX = "https://github.com/zediskaaa/Ipon-Tracking-System/";
@@ -331,32 +317,6 @@ public class BackgroundNotificationsPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void setScreenshotBlocked(PluginCall call) {
-        Activity activity = getActivity();
-        if (activity == null) {
-            call.reject("App privacy is unavailable.");
-            return;
-        }
-        boolean blocked = Boolean.TRUE.equals(call.getBoolean("blocked", false));
-        activity.runOnUiThread(() -> {
-            if (blocked) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            else activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            call.resolve();
-        });
-    }
-
-    @PluginMethod
-    public void setScreenshotMonitoring(PluginCall call) {
-        Activity activity = getActivity();
-        if (!(activity instanceof MainActivity)) {
-            call.reject("Screenshot monitoring is unavailable.");
-            return;
-        }
-        ((MainActivity) activity).setScreenshotMonitoring(Boolean.TRUE.equals(call.getBoolean("enabled", false)));
-        call.resolve();
-    }
-
-    @PluginMethod
     public void openAuthBrowser(PluginCall call) {
         String state = call.getString("appState", "");
         Activity activity = getActivity();
@@ -572,15 +532,9 @@ public class BackgroundNotificationsPlugin extends Plugin {
         SharedPreferences prefs = context.getSharedPreferences(NotificationPollReceiver.PREFS_NAME, Context.MODE_PRIVATE);
         boolean hasPerm = NotificationPollReceiver.hasNotificationPermission(context);
         boolean batteryIgnored = NotificationPollReceiver.isBatteryOptimizationIgnored(context);
-        boolean micManifestDeclared = hasManifestPermission(context, Manifest.permission.RECORD_AUDIO);
-        boolean micPermissionGranted = micManifestDeclared
-            && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                == PackageManager.PERMISSION_GRANTED;
         JSObject result = new JSObject();
         result.put("hasPermission", hasPerm);
         result.put("batteryOptimizationIgnored", batteryIgnored);
-        result.put("micManifestDeclared", micManifestDeclared);
-        result.put("micPermissionGranted", micPermissionGranted);
         result.put("instantSyncEnabled", NotificationPollReceiver.isInstantSyncEnabled(context));
         result.put("instantSyncRunning", NotificationSyncService.isRunning());
         result.put("wsConnected", NotificationSyncService.isWsConnected());
@@ -673,73 +627,6 @@ public class BackgroundNotificationsPlugin extends Plugin {
         }
         JSObject result = new JSObject();
         result.put("launched", launched);
-        call.resolve(result);
-    }
-
-    private static boolean hasManifestPermission(Context context, String permission) {
-        if (context == null || TextUtils.isEmpty(permission)) return false;
-        try {
-            PackageManager pm = context.getPackageManager();
-            PackageInfo info = Build.VERSION.SDK_INT >= 33
-                ? pm.getPackageInfo(
-                    context.getPackageName(),
-                    PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS)
-                )
-                : pm.getPackageInfo(context.getPackageName(), PackageManager.GET_PERMISSIONS);
-            if (info != null && info.requestedPermissions != null) {
-                for (String declared : info.requestedPermissions) {
-                    if (permission.equals(declared)) return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    @PluginMethod
-    public void ensureMicrophonePermission(PluginCall call) {
-        Context context = getContext();
-        if (!hasManifestPermission(context, Manifest.permission.RECORD_AUDIO)) {
-            JSObject result = new JSObject();
-            result.put("granted", false);
-            result.put("state", "missing_manifest");
-            result.put("canAskAgain", false);
-            result.put("manifestDeclared", false);
-            result.put("manifestMissing", true);
-            call.resolve(result);
-            return;
-        }
-        boolean hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            == PackageManager.PERMISSION_GRANTED;
-        if (hasAudio) {
-            JSObject result = new JSObject();
-            result.put("granted", true);
-            result.put("state", "granted");
-            result.put("canAskAgain", true);
-            result.put("manifestDeclared", true);
-            result.put("manifestMissing", false);
-            call.resolve(result);
-            return;
-        }
-        requestPermissionForAlias("microphone", call, "microphonePermsCallback");
-    }
-
-    @PermissionCallback
-    private void microphonePermsCallback(PluginCall call) {
-        if (call == null) return;
-        Context context = getContext();
-        boolean hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            == PackageManager.PERMISSION_GRANTED;
-        PermissionState state = getPermissionState("microphone");
-        boolean rationale = getActivity() != null
-            && ActivityCompat.shouldShowRequestPermissionRationale(getActivity(), Manifest.permission.RECORD_AUDIO);
-        boolean canAskAgain = hasAudio || rationale || state != PermissionState.DENIED;
-        JSObject result = new JSObject();
-        result.put("granted", hasAudio);
-        result.put("state", hasAudio ? "granted" : (state != null ? state.toString() : "denied"));
-        result.put("canAskAgain", canAskAgain);
-        result.put("manifestDeclared", true);
-        result.put("manifestMissing", false);
         call.resolve(result);
     }
 

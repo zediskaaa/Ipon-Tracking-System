@@ -60,10 +60,9 @@ test('queue-only maintenance is authenticated and keeps failed deletions retryab
   const secretCheck = edge.indexOf('timingSafeSecretEqual(providedSecret, expectedSecret)', branch);
   const queueOnly = edge.indexOf('if (body.queue_only === true)', branch);
   assert.ok(secretCheck > branch && queueOnly > secretCheck);
-  assert.match(edge, /if \(links\?\.length\) \{ referenced \+= 1; continue; \}/);
+  assert.match(edge, /if \(bucket === 'chat-attachments'\)\s*\{\s*referenced \+= 1;\s*continue;\s*\}/);
   assert.match(edge, /if \(deleteError\) throw deleteError/);
   assert.match(edge, /catch \(err\) \{\s*failed \+= slice\.length/);
-  assert.equal((edge.match(/const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments'/g) || []).length, 1);
 });
 
 test('web and Android updates defer reloads during active work', () => {
@@ -73,7 +72,7 @@ test('web and Android updates defer reloads during active work', () => {
   assert.match(core, /if \(hasPendingUpdateWork\(\)\) return;/);
   assert.match(core, /liveTag !== initialWebShellTag && !hasPendingUpdateWork\(\)/);
   assert.match(core, /if \(!force && hasPendingUpdateWork\(\)\) return \{ status: 'deferred' \};/);
-  assert.match(core, /#msg-upload-queue:not\(\[hidden\]\)/);
+  assert.doesNotMatch(core, /#msg-upload-queue/);
   assert.doesNotMatch(sw, /skipWaiting\(\)/);
 });
 

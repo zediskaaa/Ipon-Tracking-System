@@ -23,15 +23,15 @@ public class MyIponMessagingService extends FirebaseMessagingService {
             if (TextUtils.isEmpty(id)) return;
             String dedupeKey = message.getData().get("dedupe_key");
             String notifType = message.getData().get("notification_type");
+            String notifLink = message.getData().get("notification_link");
             String title = notification.getTitle();
-            if (NotificationPollReceiver.isMessageNotification(notifType, dedupeKey, title)) {
-                NotificationPollReceiver.pollWithWakeLock(this);
+            if (NotificationPollReceiver.isLegacyChatNotification(notifType, dedupeKey, notifLink)) {
                 return;
             }
             String shownKey = message.getData().get("shown_key");
             NotificationPollReceiver.showDirectNotificationIfNew(this, id,
                 dedupeKey, shownKey, notifType, title,
-                notification.getBody(), message.getData().get("notification_link"),
+                notification.getBody(), notifLink,
                 message.getData().get("actor_avatar_url"));
             return;
         }

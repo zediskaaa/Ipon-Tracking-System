@@ -32,59 +32,6 @@
   let loaderSlowTimer = null;
   let navLoaderTimer = null;
   let activeLiveRefresh = null;
-  const PENDING_SHARE_STORAGE_KEY = 'ipon_pending_share_v1';
-
-  function capturePendingShareFromUrl() {
-    if (typeof window === 'undefined' || !window.location) return null;
-    try {
-      const url = new URL(window.location.href);
-      const title = String(url.searchParams.get('share_title') || '').trim();
-      const text = String(url.searchParams.get('share_text') || '').trim();
-      const sharedUrl = String(url.searchParams.get('share_url') || '').trim();
-      if (!title && !text && !sharedUrl) return null;
-      const payload = {
-        title: title.slice(0, 180),
-        text: text.slice(0, 2000),
-        url: sharedUrl.slice(0, 1000),
-        capturedAt: Date.now()
-      };
-      try { sessionStorage.setItem(PENDING_SHARE_STORAGE_KEY, JSON.stringify(payload)); } catch { }
-      url.searchParams.delete('share_title');
-      url.searchParams.delete('share_text');
-      url.searchParams.delete('share_url');
-      if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
-        history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
-      }
-      return payload;
-    } catch {
-      return null;
-    }
-  }
-
-  function consumePendingSharePayload() {
-    const fromUrl = capturePendingShareFromUrl();
-    if (fromUrl) {
-      try { sessionStorage.removeItem(PENDING_SHARE_STORAGE_KEY); } catch { }
-      return fromUrl;
-    }
-    try {
-      const raw = sessionStorage.getItem(PENDING_SHARE_STORAGE_KEY);
-      if (!raw) return null;
-      sessionStorage.removeItem(PENDING_SHARE_STORAGE_KEY);
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return null;
-      if (parsed.capturedAt && Date.now() - Number(parsed.capturedAt) > 15 * 60 * 1000) return null;
-      return {
-        title: String(parsed.title || '').trim().slice(0, 180),
-        text: String(parsed.text || '').trim().slice(0, 2000),
-        url: String(parsed.url || '').trim().slice(0, 1000)
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  capturePendingShareFromUrl();
 
   const THEME_STORAGE_KEY = 'myipon_theme';
   const UI_SOUND_STORAGE_KEY = 'myipon_ui_sounds';
@@ -98,11 +45,6 @@
   const uiSoundLastAt = Object.create(null);
   const UI_SOUND_COOLDOWN_MS = {
     type: 38,
-    'msg-typing': 1400,
-    'msg-receive': 240,
-    'msg-send': 120,
-    'msg-voice-start': 180,
-    'msg-voice-cancel': 180,
     'pfx-shake': 160,
     'pfx-pulse': 220,
     'pfx-burst': 260
@@ -111,8 +53,7 @@
     record_contribution: 'record-addition',
     record_contribution_with_carryover: 'record-addition',
     record_withdrawal: 'record-deduction',
-    record_expense: 'record-expense',
-    send_chat_message: 'msg-send'
+    record_expense: 'record-expense'
   };
 
   function isUiSoundEnabled() {
@@ -266,57 +207,6 @@
         scheduleUiTone(ctx, master, { freq, type: 'sine', start, duration: idx === 3 ? 0.42 : 0.24, gain: idx === 3 ? 0.068 : 0.054 });
         scheduleUiTone(ctx, master, { freq: freq * 2, type: 'triangle', start, duration: 0.18, gain: 0.012 });
       });
-      return;
-    }
-    if (kind === 'msg-send') {
-      scheduleUiTone(ctx, master, { freq: 440, endFreq: 880, type: 'sine', start: 0, duration: 0.115, gain: 0.088, attack: 0.004 });
-      scheduleUiTone(ctx, master, { freq: 1174.66, endFreq: 1396.91, type: 'triangle', start: 0.024, duration: 0.095, gain: 0.036, attack: 0.004 });
-      scheduleUiBurst(ctx, master, { start: 0.004, duration: 0.022, gain: 0.038, filterFreq: 3100, q: 1.5 });
-      return;
-    }
-    if (kind === 'msg-typing') {
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(1850, ctx.currentTime);
-      lp.frequency.exponentialRampToValueAtTime(860, ctx.currentTime + 2.05);
-      lp.connect(master);
-      const echoes = [
-        { freq: 480, endFreq: 590, start: 0.00, duration: 0.22, gain: 0.088 },
-        { freq: 560, endFreq: 675, start: 0.19, duration: 0.26, gain: 0.070 },
-        { freq: 640, endFreq: 760, start: 0.39, duration: 0.34, gain: 0.055 },
-        { freq: 610, endFreq: 715, start: 0.65, duration: 0.36, gain: 0.040 },
-        { freq: 580, endFreq: 670, start: 0.94, duration: 0.40, gain: 0.027 },
-        { freq: 555, endFreq: 630, start: 1.26, duration: 0.44, gain: 0.017 },
-        { freq: 530, endFreq: 595, start: 1.60, duration: 0.48, gain: 0.009 }
-      ];
-      echoes.forEach((step) => {
-        scheduleUiTone(ctx, lp, { ...step, type: 'sine', attack: 0.012 });
-        scheduleUiTone(ctx, lp, {
-          freq: step.freq * 1.5,
-          endFreq: step.endFreq * 1.5,
-          type: 'triangle',
-          start: step.start + 0.012,
-          duration: step.duration * 0.72,
-          gain: step.gain * 0.22,
-          attack: 0.014
-        });
-      });
-      return;
-    }
-    if (kind === 'msg-receive') {
-      scheduleUiTone(ctx, master, { freq: 659.25, type: 'sine', start: 0, duration: 0.15, gain: 0.08, attack: 0.005 });
-      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.075, duration: 0.26, gain: 0.088, attack: 0.005 });
-      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.075, duration: 0.18, gain: 0.024, attack: 0.005 });
-      return;
-    }
-    if (kind === 'msg-voice-start') {
-      scheduleUiTone(ctx, master, { freq: 587.33, type: 'sine', start: 0, duration: 0.085, gain: 0.062, attack: 0.004 });
-      scheduleUiTone(ctx, master, { freq: 880.0, type: 'sine', start: 0.055, duration: 0.14, gain: 0.068, attack: 0.004 });
-      scheduleUiTone(ctx, master, { freq: 1760.0, type: 'triangle', start: 0.055, duration: 0.09, gain: 0.014, attack: 0.004 });
-      return;
-    }
-    if (kind === 'msg-voice-cancel') {
-      scheduleUiTone(ctx, master, { freq: 493.88, endFreq: 329.63, type: 'sine', start: 0, duration: 0.11, gain: 0.056, attack: 0.005 });
       return;
     }
     if (kind === 'record-addition') {
@@ -684,8 +574,7 @@
     }
   });
   function hasPendingUpdateWork() {
-    if (document.querySelector('dialog[open], .is-busy, [aria-busy="true"], #msg-upload-queue:not([hidden]), #msg-voice-recording:not([hidden])')) return true;
-    if (document.getElementById('msg-composer-wrap')?.getClientRects().length) return true;
+    if (document.querySelector('dialog[open], .is-busy, [aria-busy="true"]')) return true;
     if ([...document.querySelectorAll('input[type="file"]')].some((input) => input.files?.length)) return true;
     if (document.activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return true;
     return [...document.querySelectorAll('form input, form textarea, form select')].some((input) => {
@@ -2184,10 +2073,7 @@
         fullName: typeof patch.fullName === 'string' && patch.fullName.trim() ? patch.fullName.trim() : (base.fullName || ''),
         unreadCount: patch.unreadCount !== undefined && Number.isFinite(Number(patch.unreadCount))
           ? Math.max(0, Math.floor(Number(patch.unreadCount)))
-          : (Number.isFinite(Number(base.unreadCount)) ? Math.max(0, Math.floor(Number(base.unreadCount))) : 0),
-        unreadMessagesCount: patch.unreadMessagesCount !== undefined && Number.isFinite(Number(patch.unreadMessagesCount))
-          ? Math.max(0, Math.floor(Number(patch.unreadMessagesCount)))
-          : (Number.isFinite(Number(base.unreadMessagesCount)) ? Math.max(0, Math.floor(Number(base.unreadMessagesCount))) : 0)
+          : (Number.isFinite(Number(base.unreadCount)) ? Math.max(0, Math.floor(Number(base.unreadCount))) : 0)
       };
       const serialized = JSON.stringify(next);
       if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SHELL_SNAPSHOT_KEY, serialized);
@@ -2457,15 +2343,6 @@
     if (persist) writeShellSnapshot({ unreadCount: count });
   }
 
-  function syncMessagesBadges(unread, { persist = true } = {}) {
-    const count = Math.max(0, Math.floor(Number(unread) || 0));
-    document.querySelectorAll('[data-messages-count]').forEach((badge) => {
-      badge.textContent = count > 99 ? '99+' : String(count);
-      badge.hidden = count === 0;
-    });
-    if (persist) writeShellSnapshot({ unreadMessagesCount: count });
-  }
-
   const ACTIVE_WORKSPACE_MODE_KEY = 'ipon_workspace_mode';
 
   function readStoredWorkspaceMode() {
@@ -2512,9 +2389,6 @@
       const groupOnlyHidden = hideGroupOnly && (element.hasAttribute('data-group-only') || element.getAttribute('href') === 'members.html');
       element.hidden = !roles.includes(effectiveRole) || groupOnlyHidden;
     });
-    if (effectiveRole === 'SUPER_ADMIN') {
-      document.querySelectorAll('[data-messages-open]').forEach((el) => { el.remove(); });
-    }
   }
 
   function resolveActiveRole(passedRole) {
@@ -2549,7 +2423,7 @@
   function shouldSkipCentavosParent(el) {
     if (!el || el.nodeType !== 1) return true;
     if (CENTS_SKIP_TAGS.has(el.tagName)) return true;
-    if (typeof el.closest === 'function' && el.closest('.ipon-peso-num,.ipon-cents,.cf-cents,[data-no-cents-format],[contenteditable="true"],.msg-bubble-text,.msg-text,.msg-reply-preview-text')) {
+    if (typeof el.closest === 'function' && el.closest('.ipon-peso-num,.ipon-cents,.cf-cents,[data-no-cents-format],[contenteditable="true"]')) {
       return true;
     }
     return false;
@@ -2671,7 +2545,6 @@
     const cachedRole = currentProfile?.role || snapshot?.role || effectiveRole;
     const cachedUserId = currentProfile?.id || snapshot?.userId || '';
     const cachedUnread = Number.isFinite(Number(snapshot?.unreadCount)) ? Math.max(0, Math.floor(Number(snapshot.unreadCount))) : 0;
-    const cachedMsgUnread = Number.isFinite(Number(snapshot?.unreadMessagesCount)) ? Math.max(0, Math.floor(Number(snapshot.unreadMessagesCount))) : 0;
     const cachedAvatar = currentProfile?.avatar_url || readShellAvatar(cachedUserId);
     const roleLabel = cachedRole && VALID_SHELL_ROLES.includes(cachedRole)
       ? (cachedRole === 'SUPER_ADMIN' ? 'Owner' : 'My account')
@@ -2679,10 +2552,6 @@
     if (host) {
       const page = document.body.dataset.page;
       const superAdminPanel = document.body.dataset.panel === 'super-admin';
-      const allowMessages = !superAdminPanel && effectiveRole !== 'SUPER_ADMIN';
-      const msgUtilityHtml = allowMessages
-        ? `<button class="sidebar-utility" data-messages-open type="button" aria-label="Open messages and connections" title="Messages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><b data-messages-count${cachedMsgUnread > 0 ? '' : ' hidden'}>${cachedMsgUnread > 99 ? '99+' : cachedMsgUnread}</b></button>`
-        : '';
       const navigation = (superAdminPanel || effectiveRole === 'SUPER_ADMIN' ? superAdminNavItems : effectiveRole === 'MEMBER' ? userNavItems : navItems)
         .filter(([, , , , requiredRole]) => !requiredRole || requiredRole === effectiveRole);
       const activeId = superAdminPanel ? location.hash.slice(1) || 'overview' : ['contributions', 'withdrawals', 'expenses', 'savings', 'requests'].includes(page) ? 'contributions' : page === 'audit' ? 'reports' : page;
@@ -2710,7 +2579,7 @@
         ${sidebarArtHtml}
         <div class="app-sidebar-footer">
           <div class="sidebar-utilities">
-            ${msgUtilityHtml}<button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread > 99 ? '99+' : cachedUnread}</b></button>
+            <button class="sidebar-utility" data-notifications-open type="button" aria-label="Open notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><b data-notification-count${cachedUnread > 0 ? '' : ' hidden'}>${cachedUnread > 99 ? '99+' : cachedUnread}</b></button>
           </div>
           <button class="sidebar-user-card${isAccountSubview ? ' is-active' : ''}" data-account-open type="button" aria-label="Open my account"${isAccountSubview ? ' aria-current="page"' : ''}>
             <span class="avatar-presence-wrap">
@@ -2727,7 +2596,6 @@
       }
     }
     syncNotificationBadges(cachedUnread, { persist: false });
-    syncMessagesBadges(cachedMsgUnread, { persist: false });
     if (cachedName) syncSidebarUserInfo(cachedName, cachedRole);
     if (cachedAvatar || cachedName) {
       syncProfileAvatars({ id: cachedUserId, full_name: cachedName, role: cachedRole, avatar_url: cachedAvatar }, { persist: false });
@@ -2837,7 +2705,7 @@
       <dialog class="account-dialog" id="account-dialog" aria-label="My account">
         <div class="account-dialog-sheet">
           <div class="account-dialog-content">
-            <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><div class="account-card-connect-head"><div class="account-card-effects-copy"><strong id="quick-connect-apps-title">Connected apps</strong><small>Show clickable icons in your bio</small></div><button class="button button-secondary button-sm" id="quick-connect-apps-open" type="button">Connect apps</button></div><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-username">Username handle (optional)</label><input id="quick-username" name="username" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="e.g. juan_delacruz" aria-describedby="quick-username-help quick-username-error"><small class="field-help account-username-help" id="quick-username-help">3–24 lowercase letters, numbers, or underscores.</small><small class="field-error account-username-help" id="quick-username-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-bio">Short bio (optional)</label><textarea id="quick-bio" name="bio" rows="2" maxlength="58" placeholder="Share a short intro visible when people view your profile…" aria-describedby="quick-bio-count quick-bio-error"></textarea><small class="field-help account-bio-counter" id="quick-bio-count">0 / 58 characters</small><small class="field-error" id="quick-bio-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Message the creator directly to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-message-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Message creator</span></button></div><div class="account-support-row account-tutorial-row"><div class="account-tutorial-meta"><span class="account-tutorial-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H11a3 3 0 0 1 3 3v16.5a2 2 0 0 0-2-2H4.5A2.5 2.5 0 0 1 2 17V4.5Z"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H13a3 3 0 0 0-3 3v16.5a2 2 0 0 1 2-2h7.5A2.5 2.5 0 0 0 22 17V4.5Z"/></svg></span><span><strong>Interactive tutorial &amp; user guide</strong><small>Step-by-step walkthroughs for every myIPON feature.</small></span></div><button class="button button-primary button-sm account-tutorial-btn" data-tutorial-open type="button">Open tutorial</button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
+            <section class="account-card account-profile-card"><button class="dialog-close account-dialog-close" data-account-close type="button" aria-label="Close account settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="account-profile-identity"><div class="account-avatar-picker"><label class="account-avatar-trigger" for="quick-avatar-input" role="button" tabindex="0" title="Change profile picture" aria-label="Change profile picture"><span class="account-avatar-preview" id="quick-avatar-preview" aria-hidden="true"></span><span class="account-avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></label><button class="account-avatar-remove" id="quick-avatar-remove" type="button" title="Remove photo" aria-label="Remove profile picture" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><input id="quick-avatar-input" type="file" accept="image/*" hidden></div><span><strong id="quick-account-name">Account</strong><small id="quick-account-role">ROLE</small></span></div><div class="account-card-appearance" id="quick-card-appearance" data-card-theme="emerald"><div class="account-cover-preview" id="quick-cover-preview"><img id="quick-cover-image" alt="Your profile cover" hidden><span class="account-cover-label">PROFILE COVER</span><div class="account-cover-actions"><button class="button button-secondary button-sm" id="quick-cover-change" type="button">Change cover</button><button class="button button-secondary button-sm" id="quick-cover-remove" type="button" hidden>Remove</button></div><input id="quick-cover-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="account-card-effects-row"><div class="account-card-effects-copy"><strong>Profile effects</strong><small id="quick-effect-status">Granted permanently by Super Admin</small></div><button class="button button-secondary button-sm" id="quick-effects-open" type="button">Browse effects</button></div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card" aria-labelledby="quick-connect-apps-title"><div class="account-card-connect-head"><div class="account-card-effects-copy"><strong id="quick-connect-apps-title">Connected apps</strong><small>Show clickable icons in your bio</small></div><button class="button button-secondary button-sm" id="quick-connect-apps-open" type="button">Connect apps</button></div><div class="account-connect-preview-icons" id="quick-connect-apps-preview" aria-live="polite"></div></div><p class="account-card-feedback" id="quick-card-feedback" role="status" aria-live="polite"></p></div><form id="quick-profile-form" class="form-grid form-grid-3"><div class="field"><label for="quick-first-name">First name</label><input id="quick-first-name" name="first_name" maxlength="80" required></div><div class="field"><label for="quick-middle-name">Middle name (optional)</label><input id="quick-middle-name" name="middle_name" maxlength="80"></div><div class="field"><label for="quick-last-name">Last name</label><input id="quick-last-name" name="last_name" maxlength="80" required></div><div class="field field-wide"><label for="quick-username">Username handle (optional)</label><input id="quick-username" name="username" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="e.g. juan_delacruz" aria-describedby="quick-username-help quick-username-error"><small class="field-help account-username-help" id="quick-username-help">3–24 lowercase letters, numbers, or underscores.</small><small class="field-error account-username-help" id="quick-username-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-bio">Short bio (optional)</label><textarea id="quick-bio" name="bio" rows="2" maxlength="58" placeholder="Share a short intro visible when people view your profile…" aria-describedby="quick-bio-count quick-bio-error"></textarea><small class="field-help account-bio-counter" id="quick-bio-count">0 / 58 characters</small><small class="field-error" id="quick-bio-error" role="alert" hidden></small></div><div class="field field-wide"><label for="quick-contact">Mobile number</label><input id="quick-contact" name="contact_number" type="tel" inputmode="tel" autocomplete="tel" maxlength="13" pattern="(?:09[0-9]{9}|\+639[0-9]{9})" aria-describedby="quick-contact-help quick-contact-error" required><small class="field-help" id="quick-contact-help">Use 09XXXXXXXXX or +639XXXXXXXXX.</small><small class="field-error" id="quick-contact-error" role="alert" hidden></small></div><div class="field field-wide" data-payout-fields data-prefix="quick"></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Save changes</button></div></form><div class="account-support" data-role="ADMIN,TREASURER,MEMBER"><div class="account-support-row account-badge-row" id="quick-verified-badge-row"><div class="account-badge-meta"><span class="account-badge-emblem" id="quick-badge-emblem" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified Badge')}</span><span><strong class="account-badge-heading"><span id="quick-badge-title">Verified badge</span><span class="account-badge-pill is-available" id="quick-badge-pill">Available</span></strong><small id="quick-badge-copy">Want a blue verified badge beside your name? Contact support by email to request verification.</small></span></div><button class="button button-primary account-badge-cta" id="quick-badge-cta" data-contact-creator-badge type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Contact support</span></button></div><div class="account-support-row account-tutorial-row"><div class="account-tutorial-meta"><span class="account-tutorial-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H11a3 3 0 0 1 3 3v16.5a2 2 0 0 0-2-2H4.5A2.5 2.5 0 0 1 2 17V4.5Z"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H13a3 3 0 0 0-3 3v16.5a2 2 0 0 1 2-2h7.5A2.5 2.5 0 0 0 22 17V4.5Z"/></svg></span><span><strong>Interactive tutorial &amp; user guide</strong><small>Step-by-step walkthroughs for every myIPON feature.</small></span></div><button class="button button-primary button-sm account-tutorial-btn" data-tutorial-open type="button">Open tutorial</button></div><div class="account-support-row"><span><strong>Support myIPON</strong><small>Optional donations help maintain and improve the system.</small></span><button class="button button-secondary" data-donate-open type="button">Donate me</button></div><div class="account-support-row"><span><strong>Have an idea?</strong><small>Suggest an improvement for the system.</small></span><button class="button button-secondary" data-feature-request-open type="button">Request a feature</button></div><div class="account-support-row"><span><strong>Encounter a problem, error, or bug?</strong><small>Report an issue with screenshots for review.</small></span><button class="button button-secondary" data-bug-report-open type="button">Report a bug</button></div></div></section>
             <div class="account-side-stack"><section class="account-card account-security-card"><header class="account-section-heading"><div><h3>Sign-in security</h3><p>Keep your account secure.</p></div></header><form id="quick-email-form" class="account-inline-form"><div class="field"><label for="quick-email">Email address</label><input id="quick-email" name="email" type="email" autocomplete="email" required></div><button class="button button-secondary" type="submit">Update email</button></form><details class="account-password-disclosure"><summary><span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><strong>Change password</strong><svg class="account-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary><form id="quick-password-form" class="form-grid"><div class="field field-wide"><label for="quick-current-password">Current or temporary password</label><div class="password-control"><input id="quick-current-password" name="current_password" type="password" maxlength="128" autocomplete="current-password" required><button class="password-toggle" type="button" aria-controls="quick-current-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="field"><label for="quick-password">New password</label><div class="password-control"><input id="quick-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div><small class="field-help">${PASSWORD_RULE}</small></div><div class="field"><label for="quick-password-confirmation">Confirm password</label><div class="password-control"><input id="quick-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button class="password-toggle" type="button" aria-controls="quick-password-confirmation" aria-pressed="false" aria-label="Show password" title="Show password"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-5.5 6.5-7 10-7s7 1.5 10 7c-3 5.5-6.5 7-10 7s-7-1.5-10-7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div></div><div class="form-actions field-wide"><button class="button button-primary" type="submit">Change password</button></div></form></details></section>
             <section class="account-card account-preferences"><header class="account-section-heading"><div><h3>Appearance &amp; notifications</h3><p>Manage display theme and alert preferences.</p></div></header><label class="preference-row preference-theme-row" for="quick-theme-dark"><span><strong>Dark mode</strong><small>Switch between Warm Paper Light and Forest Dark theme.</small></span><input id="quick-theme-dark" type="checkbox" role="switch" data-theme-checkbox aria-label="Enable dark mode"></label><label class="preference-row"><span><strong>In-app notifications</strong><small>Reviews, account changes, and contribution updates.</small></span><input id="quick-notifications-enabled" type="checkbox" role="switch" aria-label="Enable in-app notifications"></label><div class="preference-row preference-background-row" data-device-background-row hidden><span class="preference-background-copy"><strong class="preference-background-heading"><span>Device &amp; in-app alerts</span><span class="bg-access-pill" data-device-bg-pill>Checking</span></strong><small data-device-bg-status>Checking device permissions for in-app alerts.</small></span><div class="preference-device-actions" data-device-bg-actions><button class="button button-primary button-sm" type="button" data-device-bg-btn>Allow background usage</button><button class="button button-secondary button-sm" type="button" data-device-test-btn>Test notification</button></div></div><div class="preference-row preference-workspace-row" data-role="ADMIN"><span><strong>Workspace settings</strong><small>Monthly schedule, payment QR, access, treasurers &amp; cycle reset</small></span><a class="button button-primary button-sm" href="settings.html" data-workspace-settings-open>Manage</a></div><div class="preference-row"><span><strong>Data &amp; storage retention</strong><small>Active savings protected · 30d bin, 90d &amp; 6-month rules</small></span><button class="button button-secondary button-sm" type="button" data-retention-rules-open>View rules</button></div><div class="preference-row"><span><strong>Terms &amp; Privacy policies</strong><small>Non-custodial scope, permissions, and full retention schedule</small></span><div class="header-actions"><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="terms">Terms</button><button class="button button-secondary button-sm" type="button" data-policy-open-inapp="privacy">Privacy</button></div></div></section></div>
             <section class="account-card account-session-card" aria-labelledby="quick-session-title"><div class="account-session-copy"><h3 id="quick-session-title">Account session</h3><p>Sign out of myIPON on this device.</p></div><button class="button button-secondary danger-action signout-action-btn" id="account-dialog-signout" data-sign-out type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg><span>Sign out</span></button></section>
@@ -2899,256 +2767,6 @@
     const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
     if (!parts.length) return '?';
     return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-  }
-
-  let presenceChannel = null;
-
-  function emitPresenceChange(leftIds = []) {
-    try {
-      window.dispatchEvent(new CustomEvent('ipon:presence-change', {
-        detail: { leftIds, at: new Date().toISOString() }
-      }));
-    } catch (_) { }
-  }
-
-  const onlineClientPlatforms = new Map();
-  let clientPlatformReportPromise = null;
-  let lastReportedClientPlatform = '';
-  let lastReportedClientPlatformAt = 0;
-  const pendingPlatformRefreshes = new Map();
-  let nativeScreenshotProbeOk = false;
-  let nativeScreenshotProbePromise = null;
-
-  function supportsNativeScreenshotProtection() {
-    return typeof window !== 'undefined' && (
-      nativeScreenshotProbeOk
-      || typeof window.IponNativePrivacy?.setScreenshotBlocked === 'function'
-      || (window.Capacitor?.getPlatform?.() === 'android'
-        && typeof window.Capacitor?.Plugins?.BackgroundNotifications?.setScreenshotBlocked === 'function')
-    );
-  }
-
-  function probeNativeScreenshotProtection() {
-    if (supportsNativeScreenshotProtection()) return Promise.resolve(true);
-    const cap = window.Capacitor;
-    if (cap?.getPlatform?.() !== 'android' || typeof cap.nativePromise !== 'function') return Promise.resolve(false);
-    if (!nativeScreenshotProbePromise) {
-      nativeScreenshotProbePromise = Promise.resolve()
-        .then(() => cap.nativePromise('BackgroundNotifications', 'setScreenshotBlocked', { blocked: false }))
-        .then(() => { nativeScreenshotProbeOk = true; return true; })
-        .catch(() => false)
-        .finally(() => { nativeScreenshotProbePromise = null; });
-    }
-    return nativeScreenshotProbePromise;
-  }
-
-  function getClientPlatform() {
-    return supportsNativeScreenshotProtection() ? 'android_app' : 'browser';
-  }
-
-  function hasLiveBrowserSession(userId) {
-    if (!userId) return false;
-    const plats = onlineClientPlatforms.get(String(userId));
-    return Boolean(plats && plats.has('browser'));
-  }
-
-  function syncPresencePlatforms(stateObj) {
-    onlineClientPlatforms.clear();
-    if (document.visibilityState !== 'hidden' && currentProfile?.id) {
-      onlineClientPlatforms.set(String(currentProfile.id), new Set([getClientPlatform()]));
-    }
-    Object.keys(stateObj || {}).forEach((key) => {
-      const entries = stateObj[key];
-      if (!Array.isArray(entries) || !entries.length) return;
-      entries.forEach((entry) => {
-        const uid = String(entry?.user_id || key || '');
-        if (!uid) return;
-        const plat = entry?.client_platform === 'android_app' ? 'android_app' : 'browser';
-        if (!onlineClientPlatforms.has(uid)) onlineClientPlatforms.set(uid, new Set());
-        onlineClientPlatforms.get(uid).add(plat);
-      });
-    });
-  }
-
-  function reportClientPlatform({ force = false } = {}) {
-    const client = getClient();
-    if (!currentProfile?.id || !configured || !client?.rpc) {
-      return Promise.resolve(getClientPlatform());
-    }
-    const initialPlatform = getClientPlatform();
-    const nowMs = Date.now();
-    if (!force && lastReportedClientPlatform === initialPlatform && nowMs - lastReportedClientPlatformAt < 60000) {
-      return clientPlatformReportPromise || Promise.resolve(initialPlatform);
-    }
-    clientPlatformReportPromise = (async () => {
-      if (typeof probeNativeScreenshotProtection === 'function') {
-        try { await probeNativeScreenshotProtection(); } catch (_) { }
-      }
-      const platform = getClientPlatform();
-      const postProbeNow = Date.now();
-      if (!force && lastReportedClientPlatform === platform && postProbeNow - lastReportedClientPlatformAt < 60000) {
-        return platform;
-      }
-      lastReportedClientPlatform = platform;
-      lastReportedClientPlatformAt = postProbeNow;
-      try {
-        const { error } = await client.rpc('report_client_platform', { p_platform: platform });
-        if (error) throw error;
-      } catch (_) {
-        lastReportedClientPlatformAt = 0;
-        return null;
-      }
-      return platform;
-    })();
-    return clientPlatformReportPromise;
-  }
-
-  function refreshPeerClientPlatforms(userIds) {
-    const targets = new Set((userIds || []).map(String).filter((id) => id && id !== String(currentProfile?.id || '')));
-    if (!targets.size || !presenceChannel?.send) return Promise.resolve(false);
-    const requestId = `${Date.now()}-${Math.random()}`;
-    return new Promise((resolve) => {
-      const finish = (confirmed) => {
-        clearTimeout(timer);
-        pendingPlatformRefreshes.delete(requestId);
-        resolve(confirmed);
-      };
-      const timer = setTimeout(() => finish(false), 3000);
-      pendingPlatformRefreshes.set(requestId, { targets, finish });
-      presenceChannel.send({ type: 'broadcast', event: 'platform-check', payload: { request_id: requestId, target_ids: Array.from(targets) } })
-        .then((status) => { if (status !== 'ok') finish(false); })
-        .catch(() => finish(false));
-    });
-  }
-
-  let presenceLifecycleBound = false;
-
-  function initPresence(profile) {
-    const client = getClient();
-    if (!client || !profile?.id || profile.role === 'SUPER_ADMIN') return;
-    reportClientPlatform();
-    if (presenceChannel) return;
-
-    try {
-      const existingPresence = typeof client.getChannels === 'function'
-        ? client.getChannels().find((ch) => ch?.topic === 'realtime:ipon-active-presence')
-        : null;
-      if (existingPresence && (existingPresence.channelAdapter?.isJoined?.() || existingPresence.channelAdapter?.isJoining?.() || existingPresence.state === 'joined' || existingPresence.state === 'joining')) {
-        presenceChannel = existingPresence;
-        return;
-      }
-      if (existingPresence) {
-        try { client.removeChannel?.(existingPresence)?.catch?.(() => { }); } catch { }
-      }
-      presenceChannel = client.channel('ipon-active-presence', {
-        config: {
-          presence: {
-            key: String(profile.id)
-          }
-        }
-      });
-
-      const hasActivePresence = (stateObj, uid) => {
-        if (!uid || !stateObj) return false;
-        const direct = stateObj[uid];
-        if (Array.isArray(direct) && direct.length > 0) return true;
-        return Object.values(stateObj).some(
-          (entries) => Array.isArray(entries) && entries.some((entry) => String(entry?.user_id || '') === uid)
-        );
-      };
-
-      const handleSync = () => {
-        try {
-          const previousBrowserIds = new Set(Array.from(onlineClientPlatforms).filter(([, platforms]) => platforms.has('browser')).map(([uid]) => uid));
-          const state = presenceChannel.presenceState();
-          syncPresencePlatforms(state);
-          const currentBrowserCount = Array.from(onlineClientPlatforms.values()).filter((platforms) => platforms.has('browser')).length;
-          const browserPresenceChanged = previousBrowserIds.size !== currentBrowserCount
-            || Array.from(previousBrowserIds).some((uid) => !hasLiveBrowserSession(uid));
-          if (browserPresenceChanged) emitPresenceChange([]);
-        } catch (_) { }
-      };
-
-      presenceChannel
-        .on('broadcast', { event: 'platform-check' }, async ({ payload }) => {
-          if (!payload?.request_id || !(payload.target_ids || []).includes(String(profile.id))) return;
-          const platform = await reportClientPlatform({ force: true });
-          presenceChannel?.send?.({ type: 'broadcast', event: 'platform-check-response', payload: {
-            request_id: payload.request_id, user_id: String(profile.id), platform
-          } })?.catch?.(() => { });
-        })
-        .on('broadcast', { event: 'platform-check-response' }, ({ payload }) => {
-          const pending = pendingPlatformRefreshes.get(payload?.request_id);
-          if (!pending || !pending.targets.has(String(payload?.user_id || ''))) return;
-          if (payload.platform) pending.targets.delete(String(payload.user_id));
-          if (!pending.targets.size) pending.finish(true);
-        })
-        .on('presence', { event: 'sync' }, handleSync)
-        .on('presence', { event: 'join' }, () => {
-          syncPresencePlatforms(presenceChannel.presenceState());
-          emitPresenceChange([]);
-        })
-        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-          const state = presenceChannel.presenceState();
-          const leftIds = [];
-          const keyId = key ? String(key) : '';
-          if (keyId && !hasActivePresence(state, keyId)) leftIds.push(keyId);
-          (leftPresences || []).forEach((p) => {
-            const uid = p?.user_id ? String(p.user_id) : '';
-            if (uid && !leftIds.includes(uid) && !hasActivePresence(state, uid)) leftIds.push(uid);
-          });
-          syncPresencePlatforms(state);
-          if (leftIds.length) emitPresenceChange(leftIds);
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED' && document.visibilityState !== 'hidden') {
-            try {
-              await probeNativeScreenshotProtection();
-              await presenceChannel.track({
-                user_id: profile.id,
-                client_platform: getClientPlatform()
-              });
-            } catch (_) { }
-          }
-        });
-
-      const handleAppAway = () => {
-        const myId = String(profile.id);
-        try { presenceChannel?.untrack?.().catch?.(() => { }); } catch (_) { }
-        onlineClientPlatforms.delete(myId);
-        emitPresenceChange([myId]);
-      };
-      const handleAppActive = () => {
-        reportClientPlatform();
-        try {
-          presenceChannel?.track?.({
-            user_id: profile.id,
-            client_platform: getClientPlatform()
-          }).catch?.(() => { });
-        } catch (_) { }
-        emitPresenceChange([]);
-      };
-      if (!presenceLifecycleBound) {
-        presenceLifecycleBound = true;
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'hidden') handleAppAway();
-          else if (document.visibilityState === 'visible') handleAppActive();
-        });
-        window.Capacitor?.Plugins?.App?.addListener?.('appStateChange', ({ isActive }) => {
-          if (isActive) handleAppActive();
-          else handleAppAway();
-        });
-      }
-
-      window.addEventListener('pagehide', () => {
-        handleAppAway();
-        try {
-          client.removeChannel(presenceChannel);
-        } catch (_) { }
-      }, { once: true });
-    } catch (presenceErr) {
-      console.warn('Realtime presence init:', presenceErr);
-    }
   }
 
   const VERIFIED_BADGE_MAP = new Map();
@@ -3417,22 +3035,18 @@
   }
 
   const SINGLE_LINE_VERIFIED_NAME_RULES = [
-    { selector: '.msg-thread-peer-title strong', minPx: 10.5 },
-    { selector: '.msg-welcome-name', minPx: 12.5 },
-    { selector: '.msg-drawer-profile strong', minPx: 11.5 },
-    { selector: '#msg-pop-name', minPx: 11.5 },
     { selector: '.effects-card-name', minPx: 11.5 },
     { selector: '#quick-account-name', minPx: 11 },
     { selector: '.sidebar-user-name', minPx: 10.5 },
     { selector: '#my-name', minPx: 11 }
   ];
   const SINGLE_LINE_VERIFIED_NAME_SELECTOR = SINGLE_LINE_VERIFIED_NAME_RULES.map((r) => r.selector).join(', ');
-  const FLEX_BADGE_HOST_SELECTOR = `${SINGLE_LINE_VERIFIED_NAME_SELECTOR}, .msg-conv-name, .msg-sender-name, .msg-group-member-meta strong, .msg-group-pick-copy strong, .msg-group-chip > span:first-child, .msg-forward-meta strong`;
+  const FLEX_BADGE_HOST_SELECTOR = SINGLE_LINE_VERIFIED_NAME_SELECTOR;
 
   function ensureVerifiedNameTextSpan(el) {
     if (!el || !el.childNodes) return null;
     const directSpan = Array.from(el.children || []).find(
-      (child) => child.tagName === 'SPAN' && !child.classList.contains('verified-badges-inline') && !child.classList.contains('msg-self-pill')
+      (child) => child.tagName === 'SPAN' && !child.classList.contains('verified-badges-inline')
     );
     if (directSpan) {
       if (!directSpan.classList.contains('verified-name-text')) directSpan.classList.add('verified-name-text');
@@ -3497,12 +3111,10 @@
       for (const rule of SINGLE_LINE_VERIFIED_NAME_RULES) {
         if (root.matches?.(rule.selector)) fitSingleLineVerifiedName(root, rule.minPx);
       }
-      if (root.matches?.('.msg-sender-name')) ensureVerifiedNameTextSpan(root);
     }
     for (const rule of SINGLE_LINE_VERIFIED_NAME_RULES) {
       root.querySelectorAll(rule.selector).forEach((el) => fitSingleLineVerifiedName(el, rule.minPx));
     }
-    root.querySelectorAll('.msg-sender-name').forEach((el) => ensureVerifiedNameTextSpan(el));
     root.querySelectorAll('.verified-badges-inline').forEach((badgeEl) => glueVerifiedBadgeToSurname(badgeEl));
   }
 
@@ -3539,8 +3151,8 @@
             if (node?.nodeType !== 1) continue;
             if (node.classList?.contains('verified-name-tail') || node.classList?.contains('verified-name-text')) continue;
             if (
-              node.matches?.('.verified-badges-inline, .msg-thread-peer-name')
-              || node.querySelector?.('.verified-badges-inline, .msg-thread-peer-name')
+              node.matches?.('.verified-badges-inline')
+              || node.querySelector?.('.verified-badges-inline')
             ) {
               scheduleVerifiedNameLayout(document);
               return;
@@ -3567,19 +3179,7 @@
     if (!item || !isSuperAdminAnnouncement(item)) return true;
     return String(profile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
   };
-  let cachedCreatorSocialId = null;
-
-  async function resolveCreatorSocialId() {
-    if (cachedCreatorSocialId) return cachedCreatorSocialId;
-    try {
-      const id = await rpc('announcement_author_social_id', { p_author_id: null, p_author_role: 'SUPER_ADMIN' });
-      if (id && typeof id === 'string') {
-        cachedCreatorSocialId = id;
-        return id;
-      }
-    } catch (_) { }
-    return null;
-  }
+  const SUPPORT_EMAIL = 'zedrickdemonteverde1@gmail.com';
 
   function applyBadgeRowState(rowEl, prefix, profile = currentProfile) {
     if (!rowEl) return;
@@ -3593,8 +3193,7 @@
     const unlockedInfo = resolveVerifiedBadgeInfo(profile);
     const emailLower = String(profile?.email || '').trim().toLowerCase();
     const isCreatorSelf = rawInfo.tier === 'CREATOR_GREEN'
-      || emailLower === CREATOR_ACCOUNT_EMAIL
-      || (cachedCreatorSocialId && String(profile?.id || '') === String(cachedCreatorSocialId));
+      || emailLower === CREATOR_ACCOUNT_EMAIL;
     const isPendingAck = !isCreatorSelf && rawInfo.tier === 'BLUE' && unlockedInfo.tier !== 'BLUE';
     const isVerifiedActive = !isCreatorSelf && unlockedInfo.tier === 'BLUE';
 
@@ -3604,7 +3203,7 @@
       pillEl.hidden = false;
     }
 
-    const msgIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    const mailIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
     const awardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg>';
 
     if (isCreatorSelf) {
@@ -3627,7 +3226,7 @@
       if (ctaBtn) {
         ctaBtn.hidden = false;
         ctaBtn.className = 'button button-primary account-badge-cta is-claim';
-        ctaBtn.removeAttribute('data-message-creator-badge');
+        ctaBtn.removeAttribute('data-contact-creator-badge');
         ctaBtn.setAttribute('data-claim-pending-badge', '1');
         ctaBtn.innerHTML = `${awardIcon}<span>Claim badge</span>`;
       }
@@ -3646,7 +3245,7 @@
       if (ctaBtn) {
         ctaBtn.hidden = true;
         ctaBtn.removeAttribute('data-claim-pending-badge');
-        ctaBtn.removeAttribute('data-message-creator-badge');
+        ctaBtn.removeAttribute('data-contact-creator-badge');
       }
       return;
     }
@@ -3654,13 +3253,13 @@
     rowEl.classList.add('is-available');
     if (titleEl) titleEl.textContent = 'Verified badge';
     if (pillEl) { pillEl.textContent = 'Available'; pillEl.classList.add('is-available'); }
-    if (copyEl) copyEl.textContent = 'Want a blue verified badge beside your name? Message the creator directly to request verification.';
+    if (copyEl) copyEl.textContent = 'Want a blue verified badge beside your name? Contact support by email to request verification.';
     if (ctaBtn) {
       ctaBtn.hidden = false;
       ctaBtn.className = 'button button-primary account-badge-cta';
       ctaBtn.removeAttribute('data-claim-pending-badge');
-      ctaBtn.setAttribute('data-message-creator-badge', '1');
-      ctaBtn.innerHTML = `${msgIcon}<span>Message creator</span>`;
+      ctaBtn.setAttribute('data-contact-creator-badge', '1');
+      ctaBtn.innerHTML = `${mailIcon}<span>Contact support</span>`;
     }
   }
 
@@ -3676,42 +3275,37 @@
     }
   }
 
-  async function openCreatorBadgeChat(triggerButton = null) {
+  function openCreatorBadgeSupport() {
     if (!currentProfile || currentProfile.role === 'SUPER_ADMIN') return false;
-    setBusy(triggerButton, true, 'Opening chat…');
-    try {
-      const creatorId = await resolveCreatorSocialId();
-      if (!creatorId) {
-        toast('Creator messaging is currently unavailable. Please try again later.', 'error');
-        return false;
-      }
-      if (String(creatorId) === String(currentProfile.id || '')) {
-        syncAccountBadgeSection(currentProfile);
-        toast('You are signed in as the Creator account.', 'info');
-        return false;
-      }
-      const info = resolveVerifiedBadgeInfo(currentProfile);
-      const draft = info.tier === 'NONE'
-        ? "Hi! I'd like to request a Verified Badge for my myIPON account."
-        : '';
-      const quickDlg = document.getElementById('account-dialog');
-      if (quickDlg?.open) quickDlg.close();
-      if (window.IponMessages?.openDirectMessage) {
-        const opened = await window.IponMessages.openDirectMessage(creatorId, { draft });
-        if (opened) return true;
-      }
-      const conv = await rpc('start_or_open_direct_chat', { p_target_id: creatorId });
-      if (conv?.id) {
-        location.href = `${homeForRole(currentProfile.role)}?chat=${encodeURIComponent(conv.id)}`;
-        return true;
-      }
+    const emailLower = String(currentProfile.email || '').trim().toLowerCase();
+    if (emailLower === CREATOR_ACCOUNT_EMAIL) {
+      syncAccountBadgeSection(currentProfile);
+      toast('You are signed in as the Creator account.', 'info');
       return false;
-    } catch (error) {
-      toast(friendlyError(error), 'error');
-      return false;
-    } finally {
-      setBusy(triggerButton, false);
     }
+    const fullName = String(currentProfile.full_name || '').trim();
+    const handle = String(currentProfile.username || '').trim();
+    const accountEmail = String(currentProfile.email || '').trim();
+    const bodyLines = [
+      "Hi! I'd like to request a Verified Badge for my myIPON account.",
+      '',
+      fullName ? `Full name: ${fullName}` : '',
+      handle ? `Username: @${handle}` : '',
+      accountEmail ? `Account email: ${accountEmail}` : ''
+    ].filter((line, idx) => idx < 2 || Boolean(line)).join('\n');
+    const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}&su=${encodeURIComponent('myIPON Verified Badge Request')}&body=${encodeURIComponent(bodyLines)}`;
+    const quickDlg = document.getElementById('account-dialog');
+    if (quickDlg?.open) quickDlg.close();
+    const opened = typeof window !== 'undefined' && typeof window.open === 'function'
+      ? window.open(composeUrl, '_blank', 'noopener,noreferrer')
+      : null;
+    if (!opened) {
+      copyPlainText(SUPPORT_EMAIL).catch(() => { });
+      toast(`Email ${SUPPORT_EMAIL} to request a Verified Badge (address copied).`, 'info');
+    } else {
+      toast(`Opening email to ${SUPPORT_EMAIL}…`, 'info');
+    }
+    return true;
   }
 
   function renderSidebarUser(profile = currentProfile) {
@@ -5502,10 +5096,10 @@
           maybeShowBadgeAwardModal(currentProfile, { force: true });
           return;
         }
-        const messageCreatorBtn = event.target?.closest?.('[data-message-creator-badge]');
-        if (messageCreatorBtn) {
+        const contactCreatorBtn = event.target?.closest?.('[data-contact-creator-badge]');
+        if (contactCreatorBtn) {
           event.preventDefault();
-          openCreatorBadgeChat(messageCreatorBtn);
+          openCreatorBadgeSupport();
           return;
         }
         const policyTrigger = event.target?.closest?.('[data-policy-open-inapp]');
@@ -5775,9 +5369,8 @@
     const dialog = document.getElementById('account-dialog');
     dialog?.setAttribute('aria-busy', 'true');
     try {
-      const [profileRes, _creatorId, appearance] = await Promise.all([
+      const [profileRes, appearance] = await Promise.all([
         client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,social_links').eq('id', currentProfile.id).single(),
-        resolveCreatorSocialId().catch(() => null),
         rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
         refreshProfileEffectsState({ checkModal: false }).catch(() => null)
       ]);
@@ -6991,7 +6584,6 @@
       return true;
     }
     if (nativeBgStatus) {
-      if (nativeBgStatus.micManifestDeclared === false) return true;
       if (typeof bgPlugin?.getBackgroundStatus === 'function' && typeof nativeBgStatus.batteryOptimizationIgnored !== 'boolean') {
         return true;
       }
@@ -7357,7 +6949,7 @@
         row.hidden = false;
         if (snap.needsApkUpdate) {
           setPill('Update APK', 'warning');
-          statusEl.textContent = 'Update to the latest myIPON APK for microphone voice notes and smoother in-app notification alerts.';
+          statusEl.textContent = 'Update to the latest myIPON APK for smoother in-app and background notification alerts.';
           button.textContent = 'Update APK';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'update-apk';
@@ -7383,7 +6975,7 @@
           addExtra('App settings', { 'data-bg-action': 'app-settings' });
         } else if (snap.status === 'granted') {
           setPill('Check access', 'neutral');
-          statusEl.textContent = 'Device notifications are enabled. Keep myIPON in Recent Apps (do not remove it from Recent Apps) to receive new messages and alerts.';
+          statusEl.textContent = 'Device notifications are enabled. Keep myIPON in Recent Apps (do not remove it from Recent Apps) to receive approvals, reminders, and announcements.';
           button.textContent = 'App settings';
           button.className = 'button button-secondary button-sm';
           button.dataset.bgAction = 'app-settings';
@@ -7393,8 +6985,8 @@
         } else if (snap.status === 'default') {
           setPill('Needs access', 'warning');
           statusEl.textContent = snap.batteryOk
-            ? 'Device notifications are off. Allow alerts and keep myIPON in Recent Apps to receive real-time message banners and updates.'
-            : 'Allow device alerts and keep myIPON in Recent Apps so message banners and updates arrive in real time.';
+            ? 'Device notifications are off. Allow alerts and keep myIPON in Recent Apps to receive real-time approvals, reminders, and announcements.'
+            : 'Allow device alerts and keep myIPON in Recent Apps so approvals, reminders, and announcements arrive in real time.';
           button.textContent = snap.batteryOk ? 'Turn on alerts' : 'Allow background usage';
           button.className = 'button button-primary button-sm';
           button.dataset.bgAction = 'allow-all';
@@ -7423,11 +7015,11 @@
       row.hidden = false;
       if (snap.isIosBrowser) {
         setPill('Add to Home', 'neutral');
-        statusEl.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to view messages and in-app alerts.';
+        statusEl.textContent = 'On iPhone/iPad, tap Share -> Add to Home Screen, then open myIPON to view updates and in-app alerts.';
         button.hidden = true;
       } else if (snap.status === 'granted' && snap.pushState?.subscribed) {
         setPill('Active', 'success');
-        statusEl.textContent = 'Browser alerts are enabled for real-time messages and notifications.';
+        statusEl.textContent = 'Browser alerts are enabled for real-time updates and notifications.';
         button.textContent = 'On';
         button.className = 'button button-secondary button-sm';
         delete button.dataset.bgAction;
@@ -7452,7 +7044,7 @@
         addExtra('Recheck', { 'data-bg-action': 'recheck' });
       } else {
         setPill('Off', 'warning');
-        statusEl.textContent = 'Turn on browser notifications to receive real-time message and activity banners.';
+        statusEl.textContent = 'Turn on browser notifications to receive real-time activity and reminder banners.';
         button.textContent = 'Turn on';
         button.className = 'button button-primary button-sm';
         button.dataset.bgAction = 'enable-notif';
@@ -7537,7 +7129,7 @@
         <header class="form-dialog-header bg-usage-header">
           <div>
             <h2 id="bg-usage-prompt-title">Enable app alerts</h2>
-            <p>Allow notification alerts on this device and keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) to receive real-time messages and updates.</p>
+            <p>Allow notification alerts on this device and keep myIPON in your phone's Recent Apps (do not remove it from Recent Apps) to receive real-time alerts and updates.</p>
           </div>
           <button class="dialog-close" type="button" data-bg-prompt-close aria-label="Close alert permission prompt">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -7548,7 +7140,7 @@
             <div class="bg-usage-item">
               <div>
                 <strong>Device notifications</strong>
-                <small>Show real-time banners for chat messages, approvals, and payment updates while myIPON stays in Recent Apps.</small>
+                <small>Show real-time banners for approvals, payment updates, reminders, and announcements while myIPON stays in Recent Apps.</small>
               </div>
               <span class="bg-access-pill" data-bg-prompt-notif-badge data-tone="warning">Required</span>
             </div>
@@ -7722,7 +7314,7 @@
       actionsWrap.querySelectorAll('[data-device-extra-btn]').forEach((el) => el.remove());
 
       if (needsApkUpdate) {
-        label.textContent = 'Update to the latest myIPON APK for Microphone voice notes and smoother in-app notification alerts.';
+        label.textContent = 'Update to the latest myIPON APK for smoother in-app and background notification alerts.';
         button.textContent = 'Update APK';
         button.dataset.actionMode = 'update-apk';
         button.disabled = false;
@@ -7799,7 +7391,7 @@
       const bgPlugin = getBackgroundNotificationsPlugin();
       if (needsApkUpdate) {
         bar.hidden = false;
-        bar.innerHTML = '<span>Update your installed APK to enable Microphone permission and smoother in-app alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="update-apk">Update APK</button>';
+        bar.innerHTML = '<span>Update your installed APK for smoother in-app and background alerts.</span><button class="button button-sm button-primary" type="button" data-device-notif-btn data-action-mode="update-apk">Update APK</button>';
       } else if (status === 'default') {
         bar.hidden = false;
         bar.innerHTML = isApp
@@ -8257,13 +7849,13 @@
     await syncDevicePermissionUI().catch(() => { });
   }
 
-  function isMessageNotificationItem(item) {
+  function isLegacyChatNotification(item) {
     if (!item) return false;
     const type = String(item.type || '').toUpperCase();
-    if (['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(type)) return true;
+    if (type.startsWith('SOCIAL_')) return true;
     const dedupe = String(item.dedupe_key || '').toUpperCase();
     if (dedupe.startsWith('SOCIAL_MSG')) return true;
-    return /^(?:New message from|New reply from|Message request from)\s+/i.test(String(item.title || ''));
+    return /[?&](?:chat|messages)=/i.test(String(item.link || ''));
   }
 
   function cleanNotificationDisplayTitle(rawTitle) {
@@ -8277,9 +7869,6 @@
 
   function formatNotificationTitle(item) {
     const raw = String(item?.title || 'myIPON').trim();
-    if (isMessageNotificationItem(item)) {
-      return raw.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
-    }
     return cleanNotificationDisplayTitle(raw);
   }
 
@@ -8288,27 +7877,18 @@
     return raw || 'Open to view details.';
   }
 
-  function isAnonymousChatNotification(item) {
-    return formatNotificationTitle(item) === 'Anonymous' && /[?&]chat=/.test(String(item?.link || ''));
-  }
-
   function resolveNotificationAvatarUrl(item) {
-    if (!item || isAnonymousChatNotification(item)) return '';
+    if (!item) return '';
     if (item.actor_avatar_url) return String(item.actor_avatar_url);
     if (item.actor_id) {
       const byId = getMemberAvatar(item.actor_id);
       if (byId) return byId;
     }
-    if (isMessageNotificationItem(item)) {
-      const senderName = formatNotificationTitle(item);
-      const byName = getMemberAvatar(senderName);
-      if (byName) return byName;
-    }
     return '';
   }
 
   async function dispatchDeviceNotification(item, userId) {
-    if (!isMobileDeviceNotifClient() || !item || item.read_at || currentProfile?.notifications_enabled === false) return;
+    if (!isMobileDeviceNotifClient() || !item || item.read_at || currentProfile?.notifications_enabled === false || isLegacyChatNotification(item)) return;
     const notifKey = notifShownKey(item) || String(item.id);
     const trayKey = item.dedupe_key ? String(item.dedupe_key) : notifKey;
     if (readShownNotificationIds(userId).includes(notifKey)) return;
@@ -8319,7 +7899,6 @@
     const avatarUrl = resolveNotificationAvatarUrl(item);
     const iconUrl = avatarUrl || '/assets/icon-192.png';
     const target = resolveNotificationTarget(item) || safeNotificationTarget(item.link) || 'dashboard.html';
-    const isMsgNotif = isMessageNotificationItem(item);
     const bgPlugin = getBackgroundNotificationsPlugin();
     if (bgPlugin?.showNotification) {
       markDeviceNotificationShown(userId, notifKey, { syncNative: false });
@@ -8445,6 +8024,7 @@
 
   function resolveNotificationTarget(item, role = currentProfile?.role || 'MEMBER') {
     if (!item || typeof item !== 'object') return safeNotificationTarget(item);
+    if (isLegacyChatNotification(item)) return homeForRole(role);
     const annPage = role === 'SUPER_ADMIN' ? 'super-admin.html' : 'dashboard.html';
     const annHash = role === 'SUPER_ADMIN' ? '#announcements' : '';
     const type = String(item.type || '').toUpperCase();
@@ -8472,21 +8052,6 @@
         return goalId ? `user.html?goal_due=${encodeQueryValue(goalId)}` : 'user.html';
       }
       return goalId ? `dashboard.html?record_goal=${encodeQueryValue(goalId)}` : 'dashboard.html';
-    }
-
-    if (type.startsWith('SOCIAL_') && role !== 'SUPER_ADMIN') {
-      const currentFile = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
-      const targetPage = ['index.html', 'login.html', 'mfa.html', 'reset-password.html', 'super-admin.html'].includes(currentFile)
-        ? 'dashboard.html'
-        : currentFile;
-      if (type === 'SOCIAL_FRIEND_REQUEST') return `${targetPage}?messages=friend_requests`;
-      if (type === 'SOCIAL_FRIEND_ACCEPTED') return `${targetPage}?messages=friends`;
-      if (safe && !/^https?:\/\//i.test(safe)) {
-        const qIndex = safe.indexOf('?');
-        const query = qIndex >= 0 ? safe.slice(qIndex) : (type === 'SOCIAL_MESSAGE_REQUEST' ? '?messages=requests' : '?messages=inbox');
-        return `${targetPage}${query}`;
-      }
-      return type === 'SOCIAL_MESSAGE_REQUEST' ? `${targetPage}?messages=requests` : `${targetPage}?messages=inbox`;
     }
 
     if (safe && !/^https?:\/\//i.test(safe) && safe.includes('?')) {
@@ -9113,13 +8678,6 @@
     }
     const targetFile = (parsedTarget.pathname.split('/').pop() || 'index.html').toLowerCase();
 
-    const isSocialTarget = Boolean(rawItem?.type?.startsWith('SOCIAL_') || parsedTarget.searchParams.has('messages') || parsedTarget.searchParams.has('chat'));
-    if (isSocialTarget && currentProfile?.role !== 'SUPER_ADMIN' && window.IponMessages?.openFromNotification) {
-      history.replaceState(null, '', target);
-      window.IponMessages.openFromNotification(rawItem || target, parsedTarget);
-      return target;
-    }
-
     if (currentFile === targetFile && !didSwitchGroup) {
       history.replaceState(null, '', target);
       window.dispatchEvent(new CustomEvent('ipon:deep-link', { detail: { url: target, item: rawItem } }));
@@ -9270,44 +8828,48 @@
     let lastSeenMs = storedLastSeen ? Number(storedLastSeen) : null;
 
     const load = async (realtimePayload) => {
-      let { data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,actor_id,actor_avatar_url,read_at,created_at').order('created_at', { ascending: false }).limit(40);
+      const runNotifQuery = (cols) => {
+        let q = client.from('notifications').select(cols);
+        if (typeof q.not === 'function') q = q.not('type', 'like', 'SOCIAL_%');
+        return q.order('created_at', { ascending: false }).limit(40);
+      };
+      let { data, error } = await runNotifQuery('id,group_id,type,title,message,link,dedupe_key,actor_id,actor_avatar_url,read_at,created_at');
       if (error) {
-        ({ data, error } = await client.from('notifications').select('id,group_id,type,title,message,link,dedupe_key,read_at,created_at').order('created_at', { ascending: false }).limit(40));
+        ({ data, error } = await runNotifQuery('id,group_id,type,title,message,link,dedupe_key,read_at,created_at'));
       }
       if (error) {
         syncBackgroundNotificationPolling(profile).catch(() => { });
         showInlineError(list, error, load);
         return;
       }
-      const rows = data || [];
+      const rows = (data || []).filter((item) => !isLegacyChatNotification(item));
 
       if (realtimePayload?.eventType && realtimePayload.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
-        dispatchDeviceNotification(match, profile.id).catch(() => { });
-        const incomingType = String(match?.type || '').toUpperCase();
-        if (['ANNOUNCEMENT', 'PLATFORM_ANNOUNCEMENT', 'RELEASE'].includes(incomingType)) {
-          activeAnnouncementsController?.load?.().catch(() => { });
-        }
-        if (incomingType === 'BADGE_GRANTED' || incomingType === 'BADGE_REMOVED') {
-          refreshVerifiedBadgesCache({ force: true, refreshOwnProfile: true }).then(() => {
-            if (incomingType === 'BADGE_GRANTED' && currentProfile && !currentProfile.verified_badge_acknowledged_at) {
-              maybeShowBadgeAwardModal(currentProfile);
-            }
-          }).catch(() => { });
-        }
-        if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED' || incomingType === 'EFFECT_TRIAL_REJECTED') {
-          refreshProfileEffectsState({ checkModal: incomingType === 'EFFECT_GRANTED' }).catch(() => { });
-        }
-        if (incomingType.startsWith('SOCIAL_')) {
-          try { window.IponMessages?.onIncomingSocialNotification?.(match); } catch { }
-        } else if (typeof activeLiveRefresh === 'function') {
-          try { activeLiveRefresh(); } catch { }
+        if (!isLegacyChatNotification(match)) {
+          dispatchDeviceNotification(match, profile.id).catch(() => { });
+          const incomingType = String(match?.type || '').toUpperCase();
+          if (['ANNOUNCEMENT', 'PLATFORM_ANNOUNCEMENT', 'RELEASE'].includes(incomingType)) {
+            activeAnnouncementsController?.load?.().catch(() => { });
+          }
+          if (incomingType === 'BADGE_GRANTED' || incomingType === 'BADGE_REMOVED') {
+            refreshVerifiedBadgesCache({ force: true, refreshOwnProfile: true }).then(() => {
+              if (incomingType === 'BADGE_GRANTED' && currentProfile && !currentProfile.verified_badge_acknowledged_at) {
+                maybeShowBadgeAwardModal(currentProfile);
+              }
+            }).catch(() => { });
+          }
+          if (incomingType === 'EFFECT_GRANTED' || incomingType === 'EFFECT_REMOVED' || incomingType === 'EFFECT_TRIAL_REJECTED') {
+            refreshProfileEffectsState({ checkModal: incomingType === 'EFFECT_GRANTED' }).catch(() => { });
+          }
+          if (typeof activeLiveRefresh === 'function') {
+            try { activeLiveRefresh(); } catch { }
+          }
         }
       } else if (realtimePayload?.eventType !== 'DELETE' && realtimePayload?.new?.id) {
         const match = rows.find((item) => String(item.id) === String(realtimePayload.new.id)) || realtimePayload.new;
-        dispatchDeviceNotification(match, profile.id).catch(() => { });
-        if (String(match?.type || '').toUpperCase().startsWith('SOCIAL_')) {
-          try { window.IponMessages?.onIncomingSocialNotification?.(match); } catch { }
+        if (!isLegacyChatNotification(match)) {
+          dispatchDeviceNotification(match, profile.id).catch(() => { });
         }
       } else if (lastSeenMs === null) {
         const newestMs = rows.reduce((max, item) => Math.max(max, Date.parse(item.created_at || '') || 0), Date.now());
@@ -9317,9 +8879,6 @@
         const unseenNew = rows.filter((item) => !item.read_at && (Date.parse(item.created_at || '') || 0) > lastSeenMs);
         unseenNew.slice(0, 3).reverse().forEach((item) => {
           dispatchDeviceNotification(item, profile.id).catch(() => { });
-          if (String(item?.type || '').toUpperCase().startsWith('SOCIAL_')) {
-            try { window.IponMessages?.onIncomingSocialNotification?.(item); } catch { }
-          }
         });
       }
 
@@ -9344,22 +8903,16 @@
         const isInvite = item.type === 'GROUP_INVITE' && !item.read_at;
         notificationItemsById.set(String(item.id), item);
         const safeTarget = isInvite ? '' : resolveNotificationTarget(item);
-        const iconPath = item.type === 'GROUP_INVITE' || item.type === 'SOCIAL_FRIEND_REQUEST' || item.type === 'SOCIAL_FRIEND_ACCEPTED'
+        const iconPath = item.type === 'GROUP_INVITE'
           ? 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'
           : item.type === 'GOAL_REMINDER'
             ? 'm19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'
-            : String(item.type || '').startsWith('SOCIAL_')
-              ? 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'
-              : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
+            : 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4';
         const displayTitle = formatNotificationTitle(item);
         const displayMessage = formatNotificationPreview(item);
-        const anonymousChatNotice = isAnonymousChatNotification(item);
         const senderAvatarUrl = resolveNotificationAvatarUrl(item);
-        const useSenderAvatar = isMessageNotificationItem(item) || Boolean(senderAvatarUrl);
-        const iconHtml = anonymousChatNotice
-          ? '<span class="notification-item-icon has-sender-avatar" aria-hidden="true"><img class="avatar-circle notification-sender-avatar" src="assets/anonymous-avatar.svg" alt=""></span>'
-          : useSenderAvatar
-          ? `<span class="notification-item-icon has-sender-avatar" aria-hidden="true">${avatarMarkup(senderAvatarUrl || null, displayTitle, 'notification-sender-avatar', item.actor_id || '')}</span>`
+        const iconHtml = senderAvatarUrl
+          ? `<span class="notification-item-icon has-sender-avatar" aria-hidden="true">${avatarMarkup(senderAvatarUrl, displayTitle, 'notification-sender-avatar', item.actor_id || '')}</span>`
           : item.type === 'BADGE_GRANTED'
             ? `<span class="notification-item-icon is-badge-granted" aria-hidden="true">${badgeSealSvgMarkup('#1d9bf0', 'Verified badge')}</span>`
             : item.type === 'BADGE_REMOVED' || item.type === 'EFFECT_REMOVED' || item.type === 'EFFECT_TRIAL_REJECTED'
@@ -9646,7 +9199,7 @@
         : Promise.resolve(false);
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
         .eq('id', session.user.id)
         .single();
       const [needsMfa, profileResult] = await Promise.all([
@@ -9760,17 +9313,6 @@
       syncShellRoleVisibility(profile.role);
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => { });
-      const startShellBackgroundServices = () => {
-        initPresence(profile);
-        if (profile.role !== 'SUPER_ADMIN' && options.requireAuth !== false) {
-          try { window.IponMessages?.init?.(profile); } catch (_) { }
-        }
-      };
-      if (options.requireAuth !== false) {
-        schedulePostReadyBoot(startShellBackgroundServices, 1200);
-      } else {
-        startShellBackgroundServices();
-      }
       appInitialized = true;
       dismissStartupFailure();
       if (options.requireAuth === false) setLoading(false);
@@ -10436,7 +9978,7 @@
     });
   }
 
-  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read|send_chat_message|edit_chat_message|delete_chat_message|toggle_message_reaction|mark_conversation_read|mark_messages_delivered|report_client_platform|update_conversation_member_state|respond_message_request|start_or_open_direct_chat|pin_chat_message|unpin_chat_message)/i;
+  const READ_ONLY_RPC_RE = /^(?:get_|list_|check_|preview_|super_admin_storage_overview|record_account_activity|mark_notification_read|mark_all_notifications_read)/i;
   let lastVerifiedSession = null;
   let lastVerifiedSessionClient = null;
   let lastVerifiedSessionAt = 0;
@@ -10545,34 +10087,6 @@
       const refreshed = await ensureFreshAuthSession(client, { force: true });
       if (refreshed?.access_token) {
         const retried = await client.functions.invoke('manage-account', { body, headers: buildHeaders(refreshed) });
-        data = retried.data;
-        error = retried.error;
-      }
-    }
-    if (error) {
-      const detail = await error.context?.json?.().catch(() => null);
-      throw new Error(detail?.error || error.message);
-    }
-    return data || {};
-  }
-
-  async function invokeSocialEmbedResolver(rawUrl) {
-    const url = String(rawUrl || '').trim();
-    if (!url) throw new Error('Missing URL to resolve.');
-    const client = getClient();
-    if (!client) throw new Error('Supabase is not connected.');
-    const buildHeaders = (sess) => {
-      const h = {};
-      if (sess?.access_token) h.Authorization = `Bearer ${sess.access_token}`;
-      else if (config.supabaseAnonKey) h.Authorization = `Bearer ${config.supabaseAnonKey}`;
-      return h;
-    };
-    const session = await ensureFreshAuthSession(client);
-    let { data, error } = await client.functions.invoke('resolve-social-embed', { body: { url }, headers: buildHeaders(session) });
-    if (error && (error?.context?.status === 401 || isAuthSessionRpcError(error))) {
-      const refreshed = await ensureFreshAuthSession(client, { force: true });
-      if (refreshed?.access_token) {
-        const retried = await client.functions.invoke('resolve-social-embed', { body: { url }, headers: buildHeaders(refreshed) });
         data = retried.data;
         error = retried.error;
       }
@@ -10743,13 +10257,7 @@
     const isOwnPost = currentProfile?.id && item?.author_id === currentProfile.id;
     const name = (isOwnPost && currentProfile.full_name) || item.author_name || (isOwner ? 'Owner' : 'Administrator');
     const avatarUrl = (isOwnPost && currentProfile.avatar_url !== undefined) ? currentProfile.avatar_url : item.author_avatar_url;
-    const rawAvatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
-    const socialTargetId = (isOwner && item.author_social_user_id && currentProfile?.role !== 'SUPER_ADMIN')
-      ? String(item.author_social_user_id)
-      : '';
-    const avatarHtml = socialTargetId
-      ? `<button type="button" class="msg-dp-btn announcement-owner-dp-btn" data-social-user-dp="${escapeHtml(socialTargetId)}" data-social-hover-dp="${escapeHtml(socialTargetId)}" aria-label="View connected owner profile" title="Hover or click to view connected profile">${rawAvatarHtml}</button>`
-      : rawAvatarHtml;
+    const avatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
     const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
     const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' }).replace(/,\s*(\d{1,2}:\d{2}\s*(?:AM|PM))$/i, ' · $1');
     return `${avatarHtml}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
@@ -11640,7 +11148,7 @@
       const [announcementsRes, reactionsRes] = await Promise.all([
         client
           .from('v_announcements')
-          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,author_social_user_id,title,description,attachments,created_at,announcement_type,release_version,is_pinned,pinned_at')
+          .select('id,group_id,author_id,author_name,author_role,author_avatar_url,title,description,attachments,created_at,announcement_type,release_version,is_pinned,pinned_at')
           .order('pinned_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(200),
@@ -11708,7 +11216,7 @@
           if (announcementId) handlePinToggle(announcementId, pinBtn);
           return;
         }
-        if (event.target.closest('.announcement-reactions-bar, [data-social-user-dp], [data-announcement-pin], [data-announcement-edit]')) return;
+        if (event.target.closest('.announcement-reactions-bar, [data-announcement-pin], [data-announcement-edit]')) return;
         const trigger = event.target.closest('[data-announcement-id]');
         if (!trigger) return;
         const target = items.find((entry) => entry.id === trigger.dataset.announcementId);
@@ -12105,7 +11613,6 @@
     const run = () => {
       dirty = false;
       pending = pending.then(refresh).catch((error) => {
-        if (document.getElementById('msg-workspace-dialog')?.open) return;
         toast(friendlyError(error), 'error');
       });
       return pending;
@@ -13846,16 +13353,16 @@
           <button type="button" class="video-viewer-center-btn" id="ipon-vv-center-play" aria-label="Play video">
             <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>
           </button>
-          <div class="msg-video-controls is-viewer-dock" id="ipon-vv-controls">
-            <input type="range" class="msg-video-seek" id="ipon-vv-seek" min="0" max="1000" value="0" aria-label="Seek video">
-            <div class="msg-video-bar-actions">
-              <div class="msg-video-bar-left">
-                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-play" aria-label="Play video" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
-                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-mute" aria-label="Mute audio" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg></button>
-                <span class="msg-video-time" id="ipon-vv-time">0:00 / 0:00</span>
+          <div class="ipon-video-controls is-viewer-dock" id="ipon-vv-controls">
+            <input type="range" class="ipon-video-seek" id="ipon-vv-seek" min="0" max="1000" value="0" aria-label="Seek video">
+            <div class="ipon-video-bar-actions">
+              <div class="ipon-video-bar-left">
+                <button type="button" class="ipon-video-ctrl-btn" id="ipon-vv-play" aria-label="Play video" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+                <button type="button" class="ipon-video-ctrl-btn" id="ipon-vv-mute" aria-label="Mute audio" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg></button>
+                <span class="ipon-video-time" id="ipon-vv-time">0:00 / 0:00</span>
               </div>
-              <div class="msg-video-bar-right">
-                <button type="button" class="msg-video-ctrl-btn" id="ipon-vv-exit-fs" aria-label="Exit fullscreen" title="Exit fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
+              <div class="ipon-video-bar-right">
+                <button type="button" class="ipon-video-ctrl-btn" id="ipon-vv-exit-fs" aria-label="Exit fullscreen" title="Exit fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
               </div>
             </div>
           </div>
@@ -14080,7 +13587,6 @@
       try { (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); } catch { }
       return 'handled';
     }
-    if (window.IponMessages?.dismissTransientMenus?.()) return 'handled';
 
     for (const id of ['ipon-video-viewer', 'ipon-image-viewer']) {
       const viewer = document.getElementById(id);
@@ -14090,19 +13596,12 @@
       }
     }
 
-    for (const id of ['confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog', 'msg-forward-dialog', 'msg-settings-dialog', 'connect-apps-dialog', 'account-dialog']) {
+    for (const id of ['confirm-dialog', 'record-action-dialog', 'notif-unblock-dialog', 'connect-apps-dialog', 'account-dialog']) {
       const dlg = document.getElementById(id);
       if (dlg?.open) {
         dlg.close(id === 'confirm-dialog' || id === 'record-action-dialog' ? 'cancel' : undefined);
         return 'handled';
       }
-    }
-
-    const msgDialog = document.getElementById('msg-workspace-dialog');
-    if (msgDialog?.open) {
-      if (window.IponMessages?.handleBackNavigation?.()) return 'handled';
-      msgDialog.close();
-      return 'handled';
     }
 
     const consentDialog = document.getElementById('ipon-policy-consent-dialog');
@@ -14112,7 +13611,7 @@
     }
 
     const openDialogs = Array.from(document.querySelectorAll('dialog[open]') || []);
-    const extraDialog = openDialogs.reverse().find((d) => d?.id && d.id !== 'msg-workspace-dialog' && d.id !== 'ipon-policy-consent-dialog');
+    const extraDialog = openDialogs.reverse().find((d) => d?.id && d.id !== 'ipon-policy-consent-dialog');
     if (extraDialog) {
       extraDialog.close();
       return 'handled';
@@ -14617,26 +14116,7 @@
     }
 
     let settleTimer = 0;
-    let activePtrInMessages = false;
     function syncPtrHeaderAnchor(sidebar) {
-      const msgDialog = activePtrInMessages ? document.getElementById('msg-workspace-dialog') : null;
-      if (msgDialog?.open) {
-        if (indicator.parentElement !== msgDialog) msgDialog.appendChild?.(indicator);
-        const chatsView = msgDialog.querySelector?.('#msg-view-chats');
-        const sidebarSearch = (chatsView && !chatsView.hidden) ? msgDialog.querySelector?.('.msg-sidebar-search') : null;
-        const anchorEl = (sidebarSearch && (Number(sidebarSearch.offsetHeight) > 0 || typeof sidebarSearch.getBoundingClientRect === 'function'))
-          ? sidebarSearch
-          : msgDialog.querySelector?.('.msg-topbar');
-        const rect = typeof anchorEl?.getBoundingClientRect === 'function' ? anchorEl.getBoundingClientRect() : null;
-        const bottom = rect && Number.isFinite(rect.bottom) && rect.bottom > 0 ? Math.round(rect.bottom) : 228;
-        indicator.style.setProperty('--ptr-top', `${bottom}px`);
-        if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.width) && rect.width > 0) {
-          indicator.style.setProperty('--ptr-left', `${Math.round(rect.left + rect.width / 2)}px`);
-        } else {
-          indicator.style.removeProperty?.('--ptr-left');
-        }
-        return;
-      }
       if (indicator.parentElement !== document.body) document.body?.appendChild?.(indicator);
       indicator.style.removeProperty?.('--ptr-left');
       const isCompact = Boolean(
@@ -14706,16 +14186,12 @@
     document.addEventListener('touchstart', (event) => {
       if (refreshing || event.touches.length !== 1) return;
       const openDialogs = Array.from(document.querySelectorAll?.('dialog[open]') || []);
-      const msgDialog = document.getElementById('msg-workspace-dialog');
-      const inMsgWorkspace = Boolean(msgDialog?.open && openDialogs.length === 1 && openDialogs[0] === msgDialog);
-      if (openDialogs.length > 0 && !inMsgWorkspace) return;
-      if (!inMsgWorkspace && (window.scrollY || document.documentElement.scrollTop || 0) > 1) return;
+      if (openDialogs.length > 0) return;
+      if ((window.scrollY || document.documentElement.scrollTop || 0) > 1) return;
       const target = event.target;
-      if (inMsgWorkspace && target?.closest?.('#msg-thread-active, .msg-composer-wrap')) return;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'OPTION') return;
       if (hasScrolledAncestor(target)) return;
-      activePtrInMessages = inMsgWorkspace;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       tracking = true;
@@ -14726,7 +14202,7 @@
       if (!tracking || refreshing || event.touches.length !== 1) return;
       const dx = event.touches[0].clientX - startX;
       const dy = event.touches[0].clientY - startY;
-      if (dy <= 0 || (!activePtrInMessages && (window.scrollY || document.documentElement.scrollTop || 0) > 1)) {
+      if (dy <= 0 || (window.scrollY || document.documentElement.scrollTop || 0) > 1) {
         if (currentPull > 0) setPullState(0);
         tracking = false;
         return;
@@ -14754,9 +14230,7 @@
       indicator.style.setProperty('--ptr-y', '12px');
       syncBodyPull(46, 'refreshing');
       try {
-        const refreshAction = activePtrInMessages && typeof window.IponMessages?.refreshWorkspace === 'function'
-          ? window.IponMessages.refreshWorkspace()
-          : triggerManualRefresh();
+        const refreshAction = triggerManualRefresh();
         await Promise.all([
           Promise.resolve(refreshAction).catch(() => { }),
           new Promise((resolve) => setTimeout(resolve, 550))
@@ -18811,7 +18285,7 @@
     escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, detachPickedFile, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled, primeUiSound,
-    syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,
+    canViewAnnouncementReactors,
     openTutorial: (...args) => window.IponTutorial?.open?.(...args),
     getCurrentUserId: () => currentProfile?.id || readShellSnapshot()?.userId || '',
     classifyAnnouncementFile, uploadAnnouncementAttachments, MAX_ANNOUNCEMENT_FILES,
@@ -18831,10 +18305,9 @@
     canonicalAppOrigin, normalizeInviteCode, extractInviteCode, formatInviteCode, bindInviteCodeInput, inviteShareUrl,
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
-    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, fitVerifiedNameLines, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeChat,
+    resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, fitVerifiedNameLines, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeSupport,
     refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
     SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
-    capturePendingShareFromUrl, consumePendingSharePayload, invokeSocialEmbedResolver,
     get profile() { return currentProfile; }
   };
   if (typeof document !== 'undefined') {

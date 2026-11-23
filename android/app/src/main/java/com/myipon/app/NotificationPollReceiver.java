@@ -19,9 +19,6 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
-import android.graphics.Typeface;
-import android.media.AudioAttributes;
-import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -30,9 +27,7 @@ import android.text.TextUtils;
 import android.util.Base64;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.app.Person;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.drawable.IconCompat;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -54,7 +49,6 @@ import org.json.JSONObject;
 public class NotificationPollReceiver extends BroadcastReceiver {
     public static final String PREFS_NAME = "myipon_bg_notifs";
     public static final String CHANNEL_ID = "myipon_alerts";
-    public static final String MESSAGE_CHANNEL_ID = "myipon_messages_v2";
     public static final String SYNC_CHANNEL_ID = "myipon_bg_sync";
     public static final String ACTION_POLL = "com.myipon.app.ACTION_POLL_NOTIFICATIONS";
     private static final int ALARM_REQUEST_CODE = 4419;
@@ -96,18 +90,6 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             channel.enableVibration(true);
             manager.createNotificationChannel(channel);
         }
-        if (manager.getNotificationChannel(MESSAGE_CHANNEL_ID) == null) {
-            NotificationChannel messageChannel = new NotificationChannel(
-                MESSAGE_CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH
-            );
-            messageChannel.setDescription("Chat messages and replies");
-            messageChannel.enableVibration(true);
-            messageChannel.setSound(messageSoundUri(context), new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build());
-            manager.createNotificationChannel(messageChannel);
-        }
         if (manager.getNotificationChannel(SYNC_CHANNEL_ID) == null) {
             NotificationChannel syncChannel = new NotificationChannel(
                 SYNC_CHANNEL_ID,
@@ -121,10 +103,6 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             syncChannel.setSound(null, null);
             manager.createNotificationChannel(syncChannel);
         }
-    }
-
-    private static Uri messageSoundUri(Context context) {
-        return Uri.parse("android.resource://" + context.getPackageName() + "/raw/myipon_message");
     }
 
     public static boolean hasFeedConfig(Context context) {
@@ -264,34 +242,24 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         }
     }
 
-    public static boolean isMessageNotification(String type, String dedupeKey, String title) {
-        if (!TextUtils.isEmpty(type)) {
-            String upper = type.trim().toUpperCase();
-            if ("SOCIAL_NEW_MESSAGE".equals(upper)
-                || "SOCIAL_MESSAGE_REPLY".equals(upper)
-                || "SOCIAL_MESSAGE_REQUEST".equals(upper)) {
-                return true;
-            }
-        }
-        if (!TextUtils.isEmpty(dedupeKey) && dedupeKey.trim().toUpperCase().startsWith("SOCIAL_MSG")) {
+    public static boolean isLegacyChatNotification(String type, String dedupeKey, String link) {
+        if (!TextUtils.isEmpty(type) && type.trim().toUpperCase(java.util.Locale.US).startsWith("SOCIAL_")) {
             return true;
         }
-        if (!TextUtils.isEmpty(title)) {
-            String t = title.trim().toLowerCase();
-            return t.startsWith("new message from ")
-                || t.startsWith("new reply from ")
-                || t.startsWith("message request from ");
+        if (!TextUtils.isEmpty(dedupeKey) && dedupeKey.trim().toUpperCase(java.util.Locale.US).startsWith("SOCIAL_MSG")) {
+            return true;
+        }
+        if (!TextUtils.isEmpty(link)) {
+            String lower = link.trim().toLowerCase(java.util.Locale.US);
+            if (lower.contains("?chat=") || lower.contains("&chat=") || lower.contains("?messages=") || lower.contains("&messages=")) {
+                return true;
+            }
         }
         return false;
     }
 
-    public static String cleanMessageNotificationTitle(String type, String dedupeKey, String rawTitle) {
+    public static String cleanNotificationTitle(String rawTitle) {
         String base = TextUtils.isEmpty(rawTitle) ? "myIPON" : rawTitle.trim();
-        if (isMessageNotification(type, dedupeKey, base)) {
-            base = base.replaceFirst("(?i)^(?:New message from|New reply from|Message request from)\\s+", "").trim();
-            if (TextUtils.isEmpty(base)) base = "User";
-            return base;
-        }
         base = base.replaceFirst("(?i)^Update\\s+Update\\s+", "Update ");
         java.util.regex.Matcher relMatcher = java.util.regex.Pattern
             .compile("(?i)^Update\\s+v?(\\d+(?:\\.\\d+)*)\\s*:\\s*(.+)$")
@@ -327,40 +295,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         return output;
     }
 
-    private static Bitmap createInitialsAvatarBitmap(String senderName) {
-        int size = 128;
-        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(output);
-        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bgPaint.setColor(0xFF0F5240);
-        float radius = size / 2f;
-        canvas.drawCircle(radius, radius, radius, bgPaint);
-
-        String initials = "U";
-        if (!TextUtils.isEmpty(senderName)) {
-            String[] parts = senderName.trim().split("\\s+");
-            StringBuilder sb = new StringBuilder();
-            for (String part : parts) {
-                if (!part.isEmpty()) {
-                    sb.append(Character.toUpperCase(part.charAt(0)));
-                    if (sb.length() == 2) break;
-                }
-            }
-            if (sb.length() > 0) initials = sb.toString();
-        }
-
-        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        textPaint.setColor(0xFFF6F1E4);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
-        textPaint.setTextSize(46f);
-        Paint.FontMetrics fm = textPaint.getFontMetrics();
-        float textY = radius - (fm.ascent + fm.descent) / 2f;
-        canvas.drawText(initials, radius, textY, textPaint);
-        return output;
-    }
-
-    private static Bitmap loadCircularAvatarBitmap(String avatarUrl, String senderName, boolean fallbackToInitials) {
+    private static Bitmap loadCircularAvatarBitmap(String avatarUrl) {
         if (!TextUtils.isEmpty(avatarUrl)) {
             String trimmed = avatarUrl.trim();
             try {
@@ -393,7 +328,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             } catch (Exception ignored) {
             }
         }
-        return fallbackToInitials ? createInitialsAvatarBitmap(senderName) : null;
+        return null;
     }
 
     public static void showDirectNotification(
@@ -418,23 +353,16 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         String avatarUrl
     ) {
         if (!hasNotificationPermission(appContext)) return;
+        if (isLegacyChatNotification(type, dedupeKey, link)) return;
         ensureChannel(appContext);
 
-        boolean isMsg = isMessageNotification(type, dedupeKey, title);
-        String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
+        String cleanTitle = cleanNotificationTitle(title);
         String cleanBody = body == null ? "" : body;
 
-        String resolvedLink = link;
-        String upperType = type == null ? "" : type.trim().toUpperCase(java.util.Locale.US);
-        if ("SOCIAL_FRIEND_REQUEST".equals(upperType)) {
-            resolvedLink = "dashboard.html?messages=friend_requests";
-        } else if ("SOCIAL_FRIEND_ACCEPTED".equals(upperType)) {
-            resolvedLink = "dashboard.html?messages=friends";
-        }
         Intent launchIntent = new Intent(appContext, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (!TextUtils.isEmpty(resolvedLink)) {
-            launchIntent.putExtra("notification_link", resolvedLink);
+        if (!TextUtils.isEmpty(link)) {
+            launchIntent.putExtra("notification_link", link);
         }
 
         int notifId = buildNotifId(id, dedupeKey);
@@ -445,39 +373,26 @@ public class NotificationPollReceiver extends BroadcastReceiver {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, isMsg ? MESSAGE_CHANNEL_ID : CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_myipon)
             .setColor(0xFF0B3428)
             .setContentTitle(cleanTitle)
             .setContentText(cleanBody)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(cleanBody))
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setDefaults(isMsg ? NotificationCompat.DEFAULT_LIGHTS | NotificationCompat.DEFAULT_VIBRATE : NotificationCompat.DEFAULT_ALL)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(tapPending);
 
-        if (isMsg && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            builder.setSound(messageSoundUri(appContext));
-        }
-
-        if (isMsg || !TextUtils.isEmpty(avatarUrl)) {
-            Bitmap avatarBitmap = loadCircularAvatarBitmap(avatarUrl, cleanTitle, isMsg);
+        if (!TextUtils.isEmpty(avatarUrl)) {
+            Bitmap avatarBitmap = loadCircularAvatarBitmap(avatarUrl);
             if (avatarBitmap != null) {
                 builder.setLargeIcon(avatarBitmap);
-                if (isMsg) {
-                    Person sender = new Person.Builder()
-                        .setName(cleanTitle)
-                        .setIcon(IconCompat.createWithBitmap(avatarBitmap))
-                        .build();
-                    NotificationCompat.MessagingStyle msgStyle = new NotificationCompat.MessagingStyle(sender)
-                        .addMessage(cleanBody, System.currentTimeMillis(), sender);
-                    builder.setStyle(msgStyle);
-                }
             }
         }
 
@@ -497,6 +412,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         String avatarUrl
     ) {
         if (context == null) return;
+        if (isLegacyChatNotification(type, dedupeKey, link)) return;
         final Context appContext = context.getApplicationContext();
         if (!hasNotificationPermission(appContext)) return;
         SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -504,7 +420,7 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         String key = !TextUtils.isEmpty(shownKey) ? shownKey : id;
         if (!TextUtils.isEmpty(key) && shown.contains(key)) return;
         if (TextUtils.isEmpty(dedupeKey) && !TextUtils.isEmpty(id) && shown.contains(id)) return;
-        String cleanTitle = cleanMessageNotificationTitle(type, dedupeKey, title);
+        String cleanTitle = cleanNotificationTitle(title);
         String cleanBody = body == null ? "" : body;
         if (!isAlreadyInTray(appContext, id, dedupeKey, cleanTitle, cleanBody)) {
             showDirectNotification(appContext, id, dedupeKey, type, title, cleanBody, link, avatarUrl);
@@ -616,34 +532,6 @@ public class NotificationPollReceiver extends BroadcastReceiver {
         }
     }
 
-    private static boolean acknowledgeMessageDelivery(String supabaseUrl, String anonKey, String feedToken, JSONArray ids) {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(supabaseUrl + "/rest/v1/rpc/ack_message_notifications_by_token").openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(5_000);
-            conn.setReadTimeout(5_000);
-            conn.setDoOutput(true);
-            conn.setRequestProperty("apikey", anonKey);
-            if (anonKey.startsWith("eyJ")) {
-                conn.setRequestProperty("Authorization", "Bearer " + anonKey);
-            }
-            conn.setRequestProperty("Content-Type", "application/json");
-            JSONObject payload = new JSONObject();
-            payload.put("p_token", feedToken);
-            payload.put("p_notification_ids", ids);
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(payload.toString().getBytes(StandardCharsets.UTF_8));
-            }
-            int statusCode = conn.getResponseCode();
-            return statusCode >= 200 && statusCode < 300;
-        } catch (Exception ignored) {
-            return false;
-        } finally {
-            if (conn != null) conn.disconnect();
-        }
-    }
-
     public static synchronized void pollSync(Context appContext) {
         SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String supabaseUrl = prefs.getString("supabase_url", null);
@@ -700,9 +588,6 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                 lastPollSuccessElapsedMs = SystemClock.elapsedRealtime();
                 if (rows.length() > 0) {
                     Set<String> shown = readShownSet(prefs);
-                    Set<String> acked = readTrackedSet(prefs, "delivery_acks");
-                    JSONArray ackIds = new JSONArray();
-                    List<String> ackKeys = new ArrayList<>();
                     boolean changed = false;
 
                     for (int i = rows.length() - 1; i >= 0; i--) {
@@ -718,40 +603,24 @@ public class NotificationPollReceiver extends BroadcastReceiver {
                         String body = row.optString("message", "");
                         String link = row.optString("link", "");
                         String avatarUrl = row.optString("actor_avatar_url", "");
+                        if (isLegacyChatNotification(type, dedupeKey, link)) continue;
                         String shownKey = !TextUtils.isEmpty(dedupeKey)
                             ? (id + ":" + (!TextUtils.isEmpty(createdAt) ? createdAt : body))
                             : id;
-                        boolean isMsg = isMessageNotification(type, dedupeKey, title);
-                        if (isMsg && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            ensureChannel(appContext);
-                            NotificationManager manager = appContext.getSystemService(NotificationManager.class);
-                            NotificationChannel channel = manager != null ? manager.getNotificationChannel(MESSAGE_CHANNEL_ID) : null;
-                            if (channel == null || channel.getImportance() == NotificationManager.IMPORTANCE_NONE) continue;
-                        }
 
                         if (!shown.contains(shownKey) && !(TextUtils.isEmpty(dedupeKey) && shown.contains(id))) {
                             if (!isAlreadyInTray(appContext, id, dedupeKey,
-                                cleanMessageNotificationTitle(type, dedupeKey, title), body)) {
+                                cleanNotificationTitle(title), body)) {
                                 showDirectNotification(appContext, id, dedupeKey, type, title, body, link, avatarUrl);
                             }
                             shown.add(shownKey);
                             if (TextUtils.isEmpty(dedupeKey)) shown.add(id);
                             changed = true;
                         }
-                        if (isMsg && !acked.contains(shownKey)) {
-                            try {
-                                ackIds.put(Long.parseLong(id));
-                                ackKeys.add(shownKey);
-                            } catch (NumberFormatException ignored) { }
-                        }
                     }
 
                     if (changed) {
                         saveShownSet(prefs, shown);
-                    }
-                    if (ackIds.length() > 0 && acknowledgeMessageDelivery(supabaseUrl, anonKey, feedToken, ackIds)) {
-                        acked.addAll(ackKeys);
-                        saveTrackedSet(prefs, "delivery_acks", acked);
                     }
                 }
             }

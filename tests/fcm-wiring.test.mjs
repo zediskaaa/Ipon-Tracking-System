@@ -21,10 +21,10 @@ test('Android registers direct FCM tokens and sends visible alerts with topic fa
   assert.match(sender, /\.from\('notification_device_tokens'\)/);
   assert.match(sender, /deviceTokens\.map\(\(token\) => sendFcm\(\{ token \}\)\)/);
   assert.match(sender, /if \(!fcmSent\) fcmSent = await sendFcm\(\{ topic: `notif-\$\{feedRow\.token\}` \}\)/);
-  assert.match(sender, /const isMessage = \['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'\]\.includes\(notifType\)/);
-  assert.match(sender, /\.\.\.\(isMessage \? \{\} : \{ notification: \{/);
+  assert.match(sender, /notifType\.startsWith\('SOCIAL_'\)/);
+  assert.match(sender, /reason:\s*'legacy_chat_removed'/);
+  assert.match(sender, /notification:\s*\{\s*title:\s*title \|\| 'myIPON',\s*body:\s*message\s*\}/);
   assert.match(sender, /notification: \{ channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag \}/);
-  assert.match(sender, /\.\.\.\(isMessage \? \{\} : \{ notification: \{ channel_id: 'myipon_alerts'/);
   assert.match(poll, /row\.optString\("actor_avatar_url", ""\)/);
   assert.match(poll, /builder\.setLargeIcon\(avatarBitmap\)/);
   assert.match(service, /message\.getNotification\(\)/);

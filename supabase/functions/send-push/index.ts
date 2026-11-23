@@ -102,20 +102,19 @@ Deno.serve(async (req) => {
     notifId = notif.id;
     notifGroupId = notif.group_id ? String(notif.group_id) : null;
     notifType = String(notif.type || '');
+    if (notifType.startsWith('SOCIAL_')) {
+      return json({ ok: true, skipped: true, reason: 'legacy_chat_removed' });
+    }
     recipientId = String(notif.recipient_id);
     title = String(notif.title || 'myIPON').trim();
-    if (['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(notifType)) {
-      title = title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User';
-    } else {
-      title = title.replace(/^Update\s+Update\s+/i, 'Update ');
-      const relMatch = title.match(/^Update\s+v?(\d+(?:\.\d+)*)\s*:\s*(.+)$/i);
-      if (relMatch) {
-        title = relMatch[2].toLowerCase().includes(relMatch[1].toLowerCase())
-          ? relMatch[2].trim()
-          : `v${relMatch[1]}: ${relMatch[2].trim()}`;
-      }
-      if (!title) title = 'myIPON';
+    title = title.replace(/^Update\s+Update\s+/i, 'Update ');
+    const relMatch = title.match(/^Update\s+v?(\d+(?:\.\d+)*)\s*:\s*(.+)$/i);
+    if (relMatch) {
+      title = relMatch[2].toLowerCase().includes(relMatch[1].toLowerCase())
+        ? relMatch[2].trim()
+        : `v${relMatch[1]}: ${relMatch[2].trim()}`;
     }
+    if (!title) title = 'myIPON';
     actorAvatarUrl = notif.actor_avatar_url ? String(notif.actor_avatar_url) : null;
     if (!actorAvatarUrl && notif.actor_id) {
       const { data: actorProf } = await admin
@@ -127,11 +126,7 @@ Deno.serve(async (req) => {
     }
     message = String(notif.message || 'You have a new notification.');
     link = String(notif.link || 'dashboard.html');
-    if (notif.type === 'SOCIAL_FRIEND_REQUEST') {
-      link = 'dashboard.html?messages=friend_requests';
-    } else if (notif.type === 'SOCIAL_FRIEND_ACCEPTED') {
-      link = 'dashboard.html?messages=friends';
-    } else if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
+    if (notif.type === 'RELEASE' && /^https?:/i.test(link)) {
       const m = `${title} ${message} ${link}`.match(/v?(\d+\.\d+\.\d+)/i);
       link = `dashboard.html?release=${encodeURIComponent(m ? m[1] : 'latest')}`;
     }
@@ -285,13 +280,11 @@ Deno.serve(async (req) => {
           const deviceTokens = (devices || []).map((row) => String(row.fcm_token || '')).filter(Boolean);
           const staleTokens: string[] = [];
           const notificationTag = `myipon-${dedupeKey || notifId}`;
-          // Message data wakes the Android poller, which renders the sender avatar.
-          const isMessage = ['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(notifType);
           const fcmMessage = {
-            ...(isMessage ? {} : { notification: {
-              title: title.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '') || 'myIPON',
+            notification: {
+              title: title || 'myIPON',
               body: message
-            } }),
+            },
             data: {
               notification_id: String(notifId),
               notification_type: notifType,
@@ -304,7 +297,7 @@ Deno.serve(async (req) => {
             android: {
               priority: 'HIGH',
               ttl: '86400s',
-              ...(isMessage ? {} : { notification: { channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag } })
+              notification: { channel_id: 'myipon_alerts', icon: 'ic_stat_myipon', tag: notificationTag }
             }
           };
           const sendFcm = async (target: { token?: string; topic?: string }) => {

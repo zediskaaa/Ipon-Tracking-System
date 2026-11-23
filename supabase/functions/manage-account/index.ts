@@ -8,7 +8,6 @@ const SYSTEM_NAME = 'myIPON';
 const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png?v=2';
 const APP_LOGIN_URL = 'https://my-ipon.vercel.app/login.html';
 const R2_PATH_MARKER = '/r2/';
-const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 let r2Client: AwsClient | null = null;
 const CLERK_ISSUER = 'https://solid-gannet-2021.clerk.accounts.dev';
 const clerkJwks = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
@@ -605,7 +604,7 @@ async function sendInactivityWarningEmail({
       </div>
       <p style="margin: 0 0 18px;">Sign in before that date to keep your profile and group access active:</p>
       <a href="${loginUrl}" style="display: inline-block; padding: 11px 20px; background: #143e30; color: #ffffff; text-decoration: none; font-weight: 700; border-radius: 8px;">Sign in to myIPON</a>
-      <p style="margin: 18px 0 0; font-size: 12.5px; color: #5c5749;">Per our Data Retention Policy, profiles, personal messages, and stored media of accounts inactive for 6 months are automatically removed 7 days after this notice.</p>
+      <p style="margin: 18px 0 0; font-size: 12.5px; color: #5c5749;">Per our Data Retention Policy, profiles and stored media of accounts inactive for 6 months are automatically removed 7 days after this notice.</p>
     </div>
   `.trim();
 
@@ -746,11 +745,9 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
       try {
         const safe = [];
         for (const item of slice) {
-          if (bucket === CHAT_ATTACHMENTS_BUCKET) {
-            const { data: links, error: linkError } = await admin.from('message_attachments')
-              .select('id').eq('bucket_id', bucket).eq('storage_path', item.object_path).limit(1);
-            if (linkError) throw linkError;
-            if (links?.length) { referenced += 1; continue; }
+          if (bucket === 'chat-attachments') {
+            referenced += 1;
+            continue;
           }
           safe.push(item);
         }
@@ -2610,123 +2607,8 @@ Deno.serve(async (request) => {
     }
   }
 
-  const ALLOWED_CHAT_EXT_RE = /\.(jpg|jpeg|png|webp|gif|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp|md|mp3|wav|ogg|m4a|webm|aac|mp4|mov|zip)$/i;
-
-  if (body.action === 'chat-upload-urls') {
-    if (actor.role === 'SUPER_ADMIN') {
-      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
-    }
-    const conversationId = String(body.conversation_id || '').trim();
-    const files = Array.isArray(body.files) ? body.files : [];
-    if (!UUID_RE.test(conversationId) || !files.length || files.length > 10) {
-      return json({ error: 'Invalid chat attachment upload request.' }, 400);
-    }
-    const { data: canSend, error: permError } = await caller.rpc('can_send_to_conversation', { p_conversation_id: conversationId });
-    if (permError || canSend !== true) {
-      return json({ error: permError?.message || 'You cannot attach files to this conversation.' }, 403);
-    }
-    try {
-      if (!r2Storage()) {
-        const { error: bucketErr } = await admin.storage.createBucket(CHAT_ATTACHMENTS_BUCKET, { public: false, fileSizeLimit: 52428800 });
-        if (bucketErr && !/already exists/i.test(bucketErr.message || '')) throw bucketErr;
-      }
-      const uploads = [];
-      for (let i = 0; i < files.length; i += 1) {
-        const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown; size?: unknown };
-        const rawName = String(entry.name || 'attachment').trim().slice(0, 180) || 'attachment';
-        const rawType = String(entry.type || '').trim().toLowerCase().slice(0, 120);
-        const rawSize = Number(entry.size || 0);
-        if (rawSize < 0 || rawSize > 52428800) {
-          return json({ error: `"${rawName}" exceeds the 50 MB file size limit.` }, 400);
-        }
-        if (BLOCKED_DISCUSSION_EXT_RE.test(rawName) || BLOCKED_DISCUSSION_MIMES.has(rawType)) {
-          return json({ error: `"${rawName}" cannot be uploaded for security reasons.` }, 400);
-        }
-        if (!ALLOWED_CHAT_EXT_RE.test(rawName) && !rawType.startsWith('image/') && !rawType.startsWith('audio/')) {
-          return json({ error: `"${rawName}" is not a supported chat file format.` }, 400);
-        }
-        const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-100) || 'attachment';
-        const kind = ['image', 'document', 'audio', 'video', 'file'].includes(String(entry.kind || '')) ? String(entry.kind) : 'file';
-        const path = `${conversationId}/${userResult.user.id}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
-        const signedUrl = isR2Path(path) ? await signR2Object(CHAT_ATTACHMENTS_BUCKET, path, 'PUT', rawType) : null;
-        const legacyUpload = signedUrl ? null : await admin.storage.from(CHAT_ATTACHMENTS_BUCKET).createSignedUploadUrl(path);
-        if (!signedUrl && (legacyUpload?.error || !legacyUpload?.data)) throw legacyUpload?.error || new Error('Could not prepare file upload.');
-        uploads.push({
-          path,
-          token: signedUrl ? 'r2' : legacyUpload?.data?.token,
-          signedUrl: signedUrl || legacyUpload?.data?.signedUrl,
-          name: rawName,
-          kind,
-          type: rawType,
-          size: Math.max(0, Math.round(rawSize))
-        });
-      }
-      return json({ uploads });
-    } catch (error) {
-      return json({ error: error instanceof Error ? error.message : 'Unable to prepare chat attachment uploads.' }, 400);
-    }
-  }
-
-  if (body.action === 'chat-view-urls') {
-    if (actor.role === 'SUPER_ADMIN') {
-      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
-    }
-    const conversationId = String(body.conversation_id || '').trim();
-    const rawPaths = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter((p) => p && !p.includes('..')).slice(0, 100) : [];
-    const downloadPath = typeof body.download_path === 'string' && !body.download_path.includes('..') ? body.download_path.trim() : '';
-    const downloadName = typeof body.download_name === 'string' ? body.download_name.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 140) : '';
-    if (!UUID_RE.test(conversationId)) return json({ error: 'Invalid conversation reference.' }, 400);
-
-    const requestPaths = downloadPath ? [downloadPath] : rawPaths;
-    if (!requestPaths.length) return json({ urls: {} });
-
-    const { data: allowed, error: allowedError } = await caller.rpc('get_conversation_attachment_paths', {
-      p_conversation_id: conversationId,
-      p_paths: requestPaths
-    });
-    if (allowedError) return json({ error: allowedError.message || 'Unable to authorize attachments.' }, 403);
-
-    const allowedPaths = Array.isArray(allowed) ? allowed : [];
-    if (!allowedPaths.length) return json({ urls: {} });
-
-    if (downloadPath) {
-      const targetPath = allowedPaths[0];
-      if (isR2Path(targetPath)) {
-        try {
-          return json({ downloadUrl: await signR2Object(CHAT_ATTACHMENTS_BUCKET, targetPath, 'GET', '', downloadName || 'attachment') });
-        } catch (error) {
-          return json({ error: error instanceof Error ? error.message : 'Unable to prepare file download link.' }, 400);
-        }
-      }
-      const { data: dlData, error: dlError } = await admin.storage
-        .from(CHAT_ATTACHMENTS_BUCKET)
-        .createSignedUrl(targetPath, 3600, { download: downloadName || true });
-      if (dlError || !dlData?.signedUrl) {
-        return json({ error: dlError?.message || 'Unable to prepare file download link.' }, 400);
-      }
-      return json({ downloadUrl: dlData.signedUrl });
-    }
-
-    try {
-      return json({ urls: await createPrivateViewUrls(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths) });
-    } catch (error) {
-      return json({ error: error instanceof Error ? error.message : 'Unable to load attachment links.' }, 400);
-    }
-  }
-
-  if (body.action === 'chat-cleanup-media') {
-    if (actor.role === 'SUPER_ADMIN') {
-      return json({ error: 'Platform owners do not have access to messaging.' }, 403);
-    }
-    const requested = Array.isArray(body.paths) ? body.paths.map((value) => String(value || '')).filter(Boolean) : [];
-    const ownSegment = `/${userResult.user.id}/`;
-    const allowedPaths = requested.filter((path) => !path.includes('..') && path.includes(ownSegment));
-    if (!allowedPaths.length) return json({ removed: 0 });
-    try {
-      return json({ removed: await removePrivateObjects(admin, CHAT_ATTACHMENTS_BUCKET, allowedPaths) });
-    } catch (error) {
-      return json({ error: error instanceof Error ? error.message : 'Unable to clean up uploaded files.' }, 400);
-    }
+  if (body.action === 'chat-upload-urls' || body.action === 'chat-view-urls' || body.action === 'chat-cleanup-media') {
+    return json({ error: 'Chat messaging has been removed from myIPON.' }, 410);
   }
 
   if (body.action === 'change-password') {

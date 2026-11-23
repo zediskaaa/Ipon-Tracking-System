@@ -3,7 +3,7 @@ name: safe-large-file-edits
 description: >-
   Prevent IDE diff-preview truncation ("... [truncated for diff preview]") and accidental tail
   deletion when editing, verifying, or restoring large source files (>= 5,000 lines or >= 250 KB,
-  such as js/core.js, css/app.css, tests/contracts.test.mjs, js/messages.js, and
+  such as js/core.js, css/app.css, tests/contracts.test.mjs, and
   database/schema.sql). Use before making any edit to a large file or recovering a truncated file.
 ---
 
@@ -19,7 +19,6 @@ Treat **any** source file with **`>= 5,000` lines or `>= 250 KB`** as a **Large 
 - `css/app.css` (~22,000+ lines)
 - `js/core.js` (~16,700+ lines)
 - `tests/contracts.test.mjs` (~12,400+ lines)
-- `js/messages.js` (~7,300+ lines)
 
 ## Mandatory Rules
 

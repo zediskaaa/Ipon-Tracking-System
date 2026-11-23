@@ -1,11 +1,10 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v260';
+const CACHE_NAME = 'ipon-shell-v261';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
-  'assets/anonymous-avatar.svg',
   'assets/icon-192.png',
   'assets/icon-512.png',
   'css/app.css',
@@ -20,9 +19,7 @@ const STATIC_ASSETS = [
   'js/profile-effects-creator.js',
   'js/core.js',
   'js/tutorial.js',
-  'js/cashflow-monitor.js',
-  'js/social-video-embeds.js',
-  'js/messages.js'
+  'js/cashflow-monitor.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -90,13 +87,10 @@ self.addEventListener('push', (event) => {
     const text = event.data ? event.data.text() : '';
     payload = text ? { body: text } : {};
   }
-  const rawTitle = String(payload.title || 'myIPON');
-  const isMsgNotif = ['SOCIAL_NEW_MESSAGE', 'SOCIAL_MESSAGE_REPLY', 'SOCIAL_MESSAGE_REQUEST'].includes(String(payload.type || ''))
-    || /^SOCIAL_MSG/i.test(String(payload.dedupe_key || ''))
-    || /^(?:New message from|New reply from|Message request from)\s+/i.test(rawTitle);
-  const title = isMsgNotif
-    ? (rawTitle.replace(/^(?:New message from|New reply from|Message request from)\s+/i, '').trim() || 'User')
-    : rawTitle;
+  if (String(payload.type || '').toUpperCase().startsWith('SOCIAL_')) {
+    return;
+  }
+  const title = String(payload.title || 'myIPON');
   const body = payload.body || payload.message || 'You have a new notification.';
   const tag = payload.tag || (payload.dedupe_key ? `myipon-${payload.dedupe_key}` : (payload.id != null ? `myipon-${payload.id}` : `myipon-${Date.now()}`));
   const targetUrl = normalizeNotificationPath(payload.url || payload.link || '/dashboard.html');

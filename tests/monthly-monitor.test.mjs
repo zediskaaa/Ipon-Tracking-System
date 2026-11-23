@@ -52,7 +52,7 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(appCss, /select:not\(\.custom-select-native\)\{[^}]*padding:\s*9px 36px 9px 14px/);
   assert.match(appCss, /input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
   assert.match(appCss, /html\[data-theme="dark"\] input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
-  assert.match(appCss, /\.audit-search-wrap input\[type="search"\],\.msg-search-input-wrap input\[type="search"\],\.tutorial-search-wrap input\[type="search"\]\{background-image:none!important;/);
+  assert.match(appCss, /\.audit-search-wrap input\[type="search"\],\.tutorial-search-wrap input\[type="search"\]\{background-image:none!important;/);
   assert.equal(
     (appCss.match(/\.data-table td\[colspan\] \{ display:block; width:100%; grid-column:1\/-1; justify-self:stretch; padding:24px 8px; border:0; text-align:center; \}\.data-table td\[colspan\] > \* \{ grid-column:auto; justify-self:auto; \}/g) || []).length,
     2,
@@ -521,15 +521,14 @@ test('global centavos formatter in js/core.js shrinks .XX centavos across all pa
   hero.textContent = '₱400.00';
   const summary = makeDomNode(1, 'P');
   summary.textContent = 'Available (₱24,000.50) − Expenses (₱15,000.00) · v2.10 · 12.50%';
-  const chatBubble = makeDomNode(1, 'DIV');
-  chatBubble.className = 'msg-bubble-text';
-  chatBubble.textContent = 'Sent ₱400.00 already';
+  const codeEl = makeDomNode(1, 'CODE');
+  codeEl.textContent = 'Sent ₱400.00 already';
   const inputEl = makeDomNode(1, 'TEXTAREA');
   inputEl.textContent = '₱400.00';
 
   rootBody.appendChild(hero);
   rootBody.appendChild(summary);
-  rootBody.appendChild(chatBubble);
+  rootBody.appendChild(codeEl);
   rootBody.appendChild(inputEl);
 
   ctx.window.Ipon.formatCentavosInNode(rootBody);
@@ -548,9 +547,9 @@ test('global centavos formatter in js/core.js shrinks .XX centavos across all pa
   const wrappedSpans = summary.childNodes.filter((n) => n.nodeType === 1 && n.className === 'ipon-peso-num');
   assert.equal(wrappedSpans.length, 2);
 
-  // Chat bubble prose & form textareas are skipped
-  assert.equal(chatBubble.childNodes.length, 1);
-  assert.equal(chatBubble.childNodes[0].nodeType, 3);
+  // Code elements & form textareas are skipped
+  assert.equal(codeEl.childNodes.length, 1);
+  assert.equal(codeEl.childNodes[0].nodeType, 3);
   assert.equal(inputEl.childNodes.length, 1);
   assert.equal(inputEl.childNodes[0].nodeType, 3);
 });

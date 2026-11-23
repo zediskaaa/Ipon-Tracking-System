@@ -1,14 +1,10 @@
 package com.myipon.app;
 
 import android.Manifest;
-import android.app.Activity;
-import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.ContentObserver;
-import android.database.Cursor;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -23,16 +19,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.provider.DocumentsContract;
-import android.provider.MediaStore;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -42,8 +34,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
@@ -65,141 +55,10 @@ public class MainActivity extends BridgeActivity {
     private Button connectionWaitButton;
     private long connectionStartMs = 0L;
     private boolean userDismissedSlowCard = false;
-    private volatile String pendingPickerSource = "";
-    private volatile long pendingPickerSetAtMs = 0L;
     private volatile String pendingAuthCallbackJson = null;
-    private volatile String pendingSharedPayloadJson = null;
-    private Activity.ScreenCaptureCallback screenCaptureCallback;
-    private ContentObserver screenshotObserver;
-    private boolean screenshotMonitoringEnabled;
-    private boolean screenshotPermissionRequested;
-    private long lastScreenshotId = -1L;
-    private long lastWindowFocusAtMs;
-    private long lastScreenshotEventAtMs;
-    private ValueCallback<Uri[]> pendingFileCallback = null;
     private FrameLayout customFullscreenContainer = null;
     private View customFullscreenView = null;
     private WebChromeClient.CustomViewCallback customFullscreenCallback = null;
-
-    private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
-        new ActivityResultContracts.StartActivityForResult(),
-        result -> {
-            final ValueCallback<Uri[]> callback = pendingFileCallback;
-            pendingFileCallback = null;
-            if (callback == null) return;
-            Uri[] uris = null;
-            final Intent data = result.getData();
-            if (result.getResultCode() == Activity.RESULT_OK && data != null) {
-                final ClipData clip = data.getClipData();
-                if (clip != null && clip.getItemCount() > 0) {
-                    final java.util.ArrayList<Uri> picked = new java.util.ArrayList<>(clip.getItemCount());
-                    for (int i = 0; i < clip.getItemCount(); i++) {
-                        final ClipData.Item item = clip.getItemAt(i);
-                        if (item != null && item.getUri() != null) {
-                            picked.add(item.getUri());
-                        }
-                    }
-                    uris = picked.isEmpty() ? null : picked.toArray(new Uri[0]);
-                } else if (data.getData() != null) {
-                    uris = new Uri[] { data.getData() };
-                } else {
-                    uris = WebChromeClient.FileChooserParams.parseResult(result.getResultCode(), data);
-                }
-            }
-            callback.onReceiveValue(uris);
-        }
-    );
-
-    private class PrivacyBridge {
-        @JavascriptInterface
-        public void setScreenshotBlocked(boolean blocked) {
-            runOnUiThread(() -> {
-                if (blocked) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            });
-        }
-
-        @JavascriptInterface
-        public void setScreenshotMonitoring(boolean enabled) {
-            MainActivity.this.setScreenshotMonitoring(enabled);
-        }
-    }
-
-    public void setScreenshotMonitoring(boolean enabled) {
-        runOnUiThread(() -> {
-            screenshotMonitoringEnabled = enabled;
-            if (enabled) startScreenshotObserver();
-            else stopScreenshotObserver();
-        });
-    }
-
-    private void startScreenshotObserver() {
-        if (!screenshotMonitoringEnabled || screenshotObserver != null) return;
-        final String permission = Build.VERSION.SDK_INT >= 33
-            ? Manifest.permission.READ_MEDIA_IMAGES : Manifest.permission.READ_EXTERNAL_STORAGE;
-        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            if (!screenshotPermissionRequested) {
-                screenshotPermissionRequested = true;
-                ActivityCompat.requestPermissions(this, new String[] { permission }, 1002);
-            }
-            return;
-        }
-        screenshotObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
-            @Override
-            public void onChange(boolean selfChange, Uri uri) {
-                if (!screenshotMonitoringEnabled || (!hasWindowFocus()
-                    && SystemClock.uptimeMillis() - lastWindowFocusAtMs > 15000L)) return;
-                try (Cursor images = getContentResolver().query(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    new String[] { MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME,
-                        Build.VERSION.SDK_INT >= 29 ? MediaStore.Images.Media.RELATIVE_PATH : MediaStore.Images.Media.DATA,
-                        MediaStore.Images.Media.DATE_ADDED },
-                    null, null, MediaStore.Images.Media.DATE_ADDED + " DESC"
-                )) {
-                    if (images == null) return;
-                    for (int checked = 0; checked < 5 && images.moveToNext(); checked++) {
-                        final long id = images.getLong(0);
-                        final String name = images.getString(1);
-                        final String path = images.getString(2);
-                        final long added = images.getLong(3);
-                        if (id == lastScreenshotId || Math.abs(System.currentTimeMillis() / 1000 - added) > 15) continue;
-                        final String location = ((name == null ? "" : name) + " " + (path == null ? "" : path)).toLowerCase(java.util.Locale.ROOT);
-                        if (!location.contains("screenshot") && !location.contains("screen_shot") && !location.contains("screen capture")) continue;
-                        lastScreenshotId = id;
-                        dispatchScreenCaptured();
-                        return;
-                    }
-                } catch (SecurityException | IllegalArgumentException ignored) { }
-            }
-        };
-        getContentResolver().registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, screenshotObserver);
-    }
-
-    private void dispatchScreenCaptured() {
-        final long now = SystemClock.uptimeMillis();
-        if (lastScreenshotEventAtMs > 0 && now - lastScreenshotEventAtMs < 1500L) return;
-        lastScreenshotEventAtMs = now;
-        dispatchWindowEvent("myipon:screen-captured");
-    }
-
-    private void stopScreenshotObserver() {
-        if (screenshotObserver == null) return;
-        getContentResolver().unregisterContentObserver(screenshotObserver);
-        screenshotObserver = null;
-    }
-
-    private class PickerSourceBridge {
-        @JavascriptInterface
-        public void setSource(String source) {
-            if ("gallery".equals(source) || "files".equals(source) || "gdrive".equals(source)) {
-                pendingPickerSource = source;
-                pendingPickerSetAtMs = SystemClock.uptimeMillis();
-            } else {
-                pendingPickerSource = "";
-                pendingPickerSetAtMs = 0L;
-            }
-        }
-    }
 
     private class AuthCallbackBridge {
         @JavascriptInterface
@@ -213,123 +72,10 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private class ShareBridge {
-        @JavascriptInterface
-        public boolean isSupported() {
-            return true;
-        }
-
-        @JavascriptInterface
-        public String consumePendingShare() {
-            return consumePendingSharedPayload();
-        }
-    }
-
     public synchronized String consumePendingAuthCallback() {
         final String payload = pendingAuthCallbackJson;
         pendingAuthCallbackJson = null;
         return payload != null ? payload : "";
-    }
-
-    public synchronized String consumePendingSharedPayload() {
-        final String payload = pendingSharedPayloadJson;
-        pendingSharedPayloadJson = null;
-        return payload != null ? payload : "";
-    }
-
-    private String consumePendingPickerSource() {
-        final String src = pendingPickerSource;
-        final long age = SystemClock.uptimeMillis() - pendingPickerSetAtMs;
-        pendingPickerSource = "";
-        pendingPickerSetAtMs = 0L;
-        return (!src.isEmpty() && age >= 0 && age <= 10_000L) ? src : "";
-    }
-
-    private boolean isPackageInstalled(String packageName) {
-        try {
-            if (Build.VERSION.SDK_INT >= 33) {
-                getPackageManager().getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0));
-            } else {
-                getPackageManager().getPackageInfo(packageName, 0);
-            }
-            return true;
-        } catch (PackageManager.NameNotFoundException ignored) {
-            return false;
-        }
-    }
-
-    private Intent buildIntentForAttachmentSource(String source, boolean allowMultiple) {
-        if ("gallery".equals(source)) {
-            if (Build.VERSION.SDK_INT >= 33) {
-                final Intent photoPicker = new Intent(MediaStore.ACTION_PICK_IMAGES);
-                photoPicker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                if (allowMultiple) {
-                    photoPicker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, Math.min(20, MediaStore.getPickImagesMaxLimit()));
-                }
-                if (photoPicker.resolveActivity(getPackageManager()) != null) {
-                    return photoPicker;
-                }
-            }
-            final Intent galleryIntent = new Intent(Intent.ACTION_PICK);
-            galleryIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            galleryIntent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
-            galleryIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] { "image/*", "video/*" });
-            if (allowMultiple) galleryIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            if (galleryIntent.resolveActivity(getPackageManager()) != null) {
-                return galleryIntent;
-            }
-            return null;
-        }
-        if ("gdrive".equals(source)) {
-            final Intent driveIntent = new Intent(Intent.ACTION_GET_CONTENT);
-            driveIntent.addCategory(Intent.CATEGORY_OPENABLE);
-            driveIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            driveIntent.setType("*/*");
-            driveIntent.setPackage("com.google.android.apps.docs");
-            driveIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
-            if (allowMultiple) driveIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            if (driveIntent.resolveActivity(getPackageManager()) != null) {
-                return driveIntent;
-            }
-            final Intent driveDocsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            driveDocsIntent.addCategory(Intent.CATEGORY_OPENABLE);
-            driveDocsIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            driveDocsIntent.setType("*/*");
-            driveDocsIntent.putExtra("android.content.extra.SHOW_ADVANCED", true);
-            driveDocsIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
-            if (Build.VERSION.SDK_INT >= 26) {
-                driveDocsIntent.putExtra(
-                    DocumentsContract.EXTRA_INITIAL_URI,
-                    DocumentsContract.buildRootUri("com.google.android.apps.docs.storage", "root")
-                );
-            }
-            if (allowMultiple) driveDocsIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            final String driveHint = isPackageInstalled("com.google.android.apps.docs")
-                ? "Open Google Drive from the storage menu to pick your files."
-                : "Google Drive app is not installed on this device.";
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, driveHint, Toast.LENGTH_LONG).show());
-            if (driveDocsIntent.resolveActivity(getPackageManager()) != null) {
-                return driveDocsIntent;
-            }
-            return null;
-        }
-        if ("files".equals(source)) {
-            final Intent docsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            docsIntent.addCategory(Intent.CATEGORY_OPENABLE);
-            docsIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            docsIntent.setType("*/*");
-            if (Build.VERSION.SDK_INT >= 26) {
-                docsIntent.putExtra(
-                    DocumentsContract.EXTRA_INITIAL_URI,
-                    DocumentsContract.buildRootUri("com.android.externalstorage.documents", "primary")
-                );
-            }
-            if (allowMultiple) docsIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            if (docsIntent.resolveActivity(getPackageManager()) != null) {
-                return docsIntent;
-            }
-        }
-        return null;
     }
 
     private final Runnable connectionMonitorTask = new Runnable() {
@@ -361,10 +107,7 @@ public class MainActivity extends BridgeActivity {
             if (webView.getParent() instanceof View) {
                 ((View) webView.getParent()).setBackgroundColor(emeraldBg);
             }
-            webView.addJavascriptInterface(new PickerSourceBridge(), "IponNativePicker");
-            webView.addJavascriptInterface(new PrivacyBridge(), "IponNativePrivacy");
             webView.addJavascriptInterface(new AuthCallbackBridge(), "IponNativeAuth");
-            webView.addJavascriptInterface(new ShareBridge(), "IponNativeShare");
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override
@@ -405,34 +148,6 @@ public class MainActivity extends BridgeActivity {
                             super.onHideCustomView();
                         }
                     }
-
-                    @Override
-                    public boolean onShowFileChooser(
-                        WebView wv,
-                        ValueCallback<Uri[]> filePathCallback,
-                        FileChooserParams fileChooserParams
-                    ) {
-                        final String source = consumePendingPickerSource();
-                        final boolean allowMultiple = fileChooserParams != null
-                            && fileChooserParams.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
-                        if (!source.isEmpty()) {
-                            final Intent targeted = buildIntentForAttachmentSource(source, allowMultiple);
-                            if (targeted != null) {
-                                if (pendingFileCallback != null) {
-                                    pendingFileCallback.onReceiveValue(null);
-                                    pendingFileCallback = null;
-                                }
-                                try {
-                                    pendingFileCallback = filePathCallback;
-                                    sourceFilePickerLauncher.launch(targeted);
-                                    return true;
-                                } catch (Throwable err) {
-                                    pendingFileCallback = null;
-                                }
-                            }
-                        }
-                        return super.onShowFileChooser(wv, filePathCallback, fileChooserParams);
-                    }
                 });
             }
             setupStartupConnectionOverlay(webView);
@@ -461,7 +176,6 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncWorker.ensureScheduled(this);
         handleNotificationIntent(getIntent());
         handleAuthCallbackIntent(getIntent());
-        handleShareIntent(getIntent());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -529,7 +243,6 @@ public class MainActivity extends BridgeActivity {
         setIntent(intent);
         handleNotificationIntent(intent);
         handleAuthCallbackIntent(intent);
-        handleShareIntent(intent);
     }
 
     private void dispatchWindowEvent(final String eventName) {
@@ -545,7 +258,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) lastWindowFocusAtMs = SystemClock.uptimeMillis();
         dispatchWindowEvent(hasFocus ? "focus" : "blur");
     }
 
@@ -556,7 +268,6 @@ public class MainActivity extends BridgeActivity {
         NotificationSyncWorker.ensureScheduled(this);
         dispatchWindowEvent("myipon:native-resume");
         if (pendingAuthCallbackJson != null) dispatchWindowEvent("myipon:native-oauth-callback");
-        if (pendingSharedPayloadJson != null) dispatchWindowEvent("myipon:native-share");
         if (connectionOverlay != null) {
             updateConnectionOverlay();
             final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
@@ -574,22 +285,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    public void onStart() {
-        super.onStart();
-        if (Build.VERSION.SDK_INT >= 34) {
-            screenCaptureCallback = this::dispatchScreenCaptured;
-            registerScreenCaptureCallback(getMainExecutor(), screenCaptureCallback);
-        }
-        startScreenshotObserver();
-    }
-
-    @Override
     public void onStop() {
-        if (Build.VERSION.SDK_INT >= 34 && screenCaptureCallback != null) {
-            unregisterScreenCaptureCallback(screenCaptureCallback);
-            screenCaptureCallback = null;
-        }
-        stopScreenshotObserver();
         super.onStop();
         if (NotificationSyncService.canStartFromBackground(this)) {
             NotificationSyncService.ensureStarted(this);
@@ -601,10 +297,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 1002) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) startScreenshotObserver();
-            else Toast.makeText(this, "Enable Photos access in Android app settings for screenshot notices.", Toast.LENGTH_LONG).show();
-        }
         if (requestCode == 1001 && NotificationPollReceiver.hasNotificationPermission(this)) {
             NotificationPollReceiver.ensureChannel(this);
             NotificationSyncService.ensureStarted(this);
@@ -687,103 +379,6 @@ public class MainActivity extends BridgeActivity {
                 }
                 webView.evaluateJavascript(
                     "(function(){try{window.dispatchEvent(new Event('myipon:native-oauth-callback'));}catch(e){}})()",
-                    null
-                );
-            });
-        }
-    }
-
-    private String extractIntentCharSequence(Intent intent, String key) {
-        if (intent == null || key == null) return "";
-        try {
-            final CharSequence cs = intent.getCharSequenceExtra(key);
-            if (cs != null && cs.length() > 0) return cs.toString().trim();
-        } catch (Throwable ignored) { }
-        try {
-            final String s = intent.getStringExtra(key);
-            if (s != null && !s.trim().isEmpty()) return s.trim();
-        } catch (Throwable ignored) { }
-        return "";
-    }
-
-    private String extractSharedTextFromIntent(Intent intent) {
-        String text = extractIntentCharSequence(intent, Intent.EXTRA_TEXT);
-        if (!text.isEmpty()) return text;
-        final String html = extractIntentCharSequence(intent, Intent.EXTRA_HTML_TEXT);
-        if (!html.isEmpty()) {
-            final java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://[^\\s\"'<>]+").matcher(html);
-            if (m.find()) return m.group(0).trim();
-            final String plain = html.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
-            if (!plain.isEmpty()) return plain;
-        }
-        final ClipData clip = intent.getClipData();
-        if (clip != null && clip.getItemCount() > 0) {
-            for (int i = 0; i < clip.getItemCount(); i++) {
-                final ClipData.Item item = clip.getItemAt(i);
-                if (item == null) continue;
-                final CharSequence itemText = item.getText();
-                if (itemText != null && !itemText.toString().trim().isEmpty()) {
-                    return itemText.toString().trim();
-                }
-                final Uri itemUri = item.getUri();
-                if (itemUri != null) {
-                    final String scheme = itemUri.getScheme();
-                    if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-                        return itemUri.toString().trim();
-                    }
-                }
-                try {
-                    final CharSequence coerced = item.coerceToText(this);
-                    if (coerced != null) {
-                        final String candidate = coerced.toString().trim();
-                        if (!candidate.isEmpty() && !candidate.startsWith("content://") && !candidate.startsWith("file://")) {
-                            return candidate;
-                        }
-                    }
-                } catch (Throwable ignored) { }
-            }
-        }
-        return "";
-    }
-
-    private void handleShareIntent(Intent intent) {
-        if (intent == null) return;
-        if (!Intent.ACTION_SEND.equals(intent.getAction())) return;
-        final String mime = intent.getType();
-        if (mime != null && !mime.startsWith("text/")) return;
-        String sharedText = extractSharedTextFromIntent(intent);
-        String sharedTitle = extractIntentCharSequence(intent, Intent.EXTRA_SUBJECT);
-        if (sharedTitle.isEmpty()) {
-            sharedTitle = extractIntentCharSequence(intent, Intent.EXTRA_TITLE);
-        }
-        intent.setAction(Intent.ACTION_MAIN);
-        intent.removeExtra(Intent.EXTRA_TEXT);
-        intent.removeExtra(Intent.EXTRA_HTML_TEXT);
-        intent.removeExtra(Intent.EXTRA_SUBJECT);
-        intent.removeExtra(Intent.EXTRA_TITLE);
-        intent.setClipData(null);
-        if (sharedText.isEmpty() && sharedTitle.isEmpty()) return;
-        if (sharedText.length() > 4000) sharedText = sharedText.substring(0, 4000);
-        if (sharedTitle.length() > 200) sharedTitle = sharedTitle.substring(0, 200);
-        try {
-            final JSONObject payload = new JSONObject();
-            payload.put("text", sharedText);
-            payload.put("title", sharedTitle);
-            payload.put("url", "");
-            pendingSharedPayloadJson = payload.toString();
-        } catch (Throwable err) {
-            return;
-        }
-        final WebView webView = bridge != null ? bridge.getWebView() : null;
-        if (webView != null) {
-            webView.post(() -> {
-                final String currentUrl = webView.getUrl();
-                if (currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl) || currentUrl.endsWith("offline.html")) {
-                    webView.loadUrl(APP_ENTRY_URL);
-                    return;
-                }
-                webView.evaluateJavascript(
-                    "(function(){try{window.dispatchEvent(new Event('myipon:native-share'));}catch(e){}})()",
                     null
                 );
             });

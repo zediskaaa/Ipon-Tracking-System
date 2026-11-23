@@ -258,10 +258,9 @@ test('first-open badge celebration modal pops up once with confetti, permanent v
   assert.doesNotMatch(longTempVm.appendedNodes[0].innerHTML, /badge-celebrate-activity-box|2 months/i);
 });
 
-test('Super Admin Badges tab, messages integration, and CSS contracts are complete and balanced', () => {
+test('Super Admin Badges tab and CSS contracts are complete and balanced', () => {
   const html = read('super-admin.html');
   const superAdminJs = read('js/super-admin.js');
-  const messagesJs = read('js/messages.js');
   const coreJs = read('js/core.js');
   const css = read('css/app.css');
 
@@ -280,22 +279,16 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(superAdminJs, /badgeRemoveForm\?\.addEventListener\('submit'[\s\S]*?Ipon\.confirmAction\([\s\S]*?super_admin_remove_verified_badge/);
   assert.match(superAdminJs, /renderBadges/);
 
-  // Messages surface integration & announcement badge exclusion
+  // Announcement badge exclusion
   assert.doesNotMatch(coreJs, /announcement-author[^>]*>\$\{escapeHtml\(name\)\}\$\{verifiedBadgesHtml/);
-  assert.match(messagesJs, /function userBadgesHtml\(/);
-  assert.match(messagesJs, /msg-conv-bottom-meta/);
-  assert.match(messagesJs, /id="msg-pop-name">\$\{escapeHtml\(profile\.full_name\)\}\$\{userBadgesHtml\(profile\)\}/);
-  assert.match(messagesJs, /msg-sender-name">\$\{escapeHtml\(conv\.anonymous_enabled \? 'Anonymous' : senderUser\.full_name\)\}\$\{conv\.anonymous_enabled \? '' : userBadgesHtml\(senderUser\)\}/);
 
   // CSS badge & celebration modal rules
   assert.match(css, /\.verified-badge-svg\s*\{[^}]*width:\s*0\.95em;[^}]*height:\s*0\.95em;[^}]*background:\s*transparent !important/);
-  assert.match(css, /\.msg-conv-name\s+\.verified-badges-inline/);
   assert.match(css, /@keyframes badgeCelebrateGlow/);
   assert.match(css, /\.verified-badge-tooltip\s*\{/);
   assert.match(css, /\.badge-celebrate-confetti-canvas\s*\{/);
   assert.match(css, /\.badge-celebrate-date\.is-permanent-card\s*\{/);
   assert.match(css, /\.badge-celebrate-activity-box\s*\{/);
-  assert.match(css, /\.msg-conv-bottom-meta\s*\{/);
 });
 
 test('2-month inactivity rule, Thank-you unlock, and verified-since hover tooltip work across SQL and runtime', async () => {
@@ -386,7 +379,7 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   const coreJsUpdated = read('js/core.js');
   assert.doesNotMatch(coreJsUpdated, /class="announcement-view-arrow"/);
   assert.match(coreJsUpdated, /class="announcement-card-bottom-bar"/);
-  assert.match(heroPlatesCss, /\.announcement-owner-dp-btn[\s\S]*?grid-row:\s*1 \/ 3;\s*align-self:\s*center;/);
+  assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta > \.announcement-avatar[\s\S]*?grid-row:\s*1 \/ 3;\s*align-self:\s*center;/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta time\s*\{[^}]*grid-column:\s*2;[^}]*white-space:\s*nowrap;/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-card-bottom-bar\s*\{[^}]*flex-direction:\s*column;/);
   assert.match(heroPlatesCss, /\.announcement-panel \.announcement-item-meta\s*\{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);/);
@@ -437,9 +430,8 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   assert.match(mig114, /interval '2 months'/i);
 });
 
-test('My Account verified badge card lets members message the creator directly without error', () => {
+test('My Account verified badge card routes members to Gmail support compose without chat', () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   const accountHtml = read('account.html');
   const accountJs = read('js/account.js');
   const css = read('css/app.css');
@@ -451,16 +443,15 @@ test('My Account verified badge card lets members message the creator directly w
   const accIds = [...accountHtml.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
   assert.equal(accIds.length, new Set(accIds).size, 'Duplicate IDs in account.html');
 
-  // My Account quick modal and account.html both expose creator messaging entry point
+  // My Account quick modal and account.html both expose non-chat creator support CTA
   assert.match(coreJs, /id="quick-verified-badge-row"/);
-  assert.match(coreJs, /data-message-creator-badge/);
-  assert.match(coreJs, /announcement_author_social_id/);
-  assert.match(coreJs, /window\.IponMessages\?\.openDirectMessage/);
-  assert.match(coreJs, /syncAccountBadgeSection,\s*openCreatorBadgeChat/);
+  assert.match(coreJs, /data-contact-creator-badge/);
+  assert.doesNotMatch(coreJs, /data-message-creator-badge|openCreatorBadgeChat|announcement_author_social_id/);
+  assert.match(coreJs, /https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=/);
+  assert.match(coreJs, /syncAccountBadgeSection,\s*openCreatorBadgeSupport/);
   assert.match(accountHtml, /id="account-verified-badge-row"/);
+  assert.match(accountHtml, /data-contact-creator-badge/);
   assert.match(accountJs, /syncAccountBadgeSection/);
-  assert.match(messagesJs, /async function openDirectMessage\(/);
-  assert.match(messagesJs, /window\.IponMessages = \{[\s\S]*openDirectMessage/);
   assert.match(css, /\.account-support-row\.account-badge-row\s*\{/);
   assert.match(css, /\.account-badge-pill\.is-available\s*\{/);
   assert.match(coreJs, /is-badge-granted[\s\S]*?badgeSealSvgMarkup\('#1d9bf0'/);
@@ -471,11 +462,7 @@ test('My Account verified badge card lets members message the creator directly w
   const outroIdx = coreJs.indexOf('if (isOutro(line) && !hasMoreStructuredContent)');
   assert.ok(bulletIdx !== -1 && outroIdx > bulletIdx, 'Bullet detection must precede outro detection');
 
-  // Badges appear everywhere people are viewed (group picker, forward/blocked lists, workspace tables, discussions)
-  assert.match(messagesJs, /msg-group-pick-copy[\s\S]*?userBadgesHtml\(u\)/);
-  assert.match(messagesJs, /msg-group-chip[\s\S]*?userBadgesHtml\(u\)/);
-  assert.match(messagesJs, /msg-forward-meta[\s\S]*?userBadgesHtml\(/);
-  assert.match(messagesJs, /msg-blocked-row[\s\S]*?userBadgesHtml\(b\)/);
+  // Badges appear everywhere people are viewed in workspace tables and record discussions
   assert.match(read('js/members.js'), /verifiedBadgesHtml\?\.\(account\?\.id \|\| member\.id\)/);
   assert.match(read('js/settings.js'), /verifiedBadgesHtml\?\.\(profile\.user_id \|\| profile\.id\)/);
   assert.match(read('js/requests.js'), /verifiedBadgesHtml\?\.\(item\.requesterId \|\| item\.requesterName\)/);
@@ -489,41 +476,8 @@ test('My Account verified badge card lets members message the creator directly w
   assert.match(ipon.verifiedBadgesHtml('mem-1'), /data-verified-uid="u-alias-1"/);
   assert.match(ipon.verifiedBadgesHtml('Alias Saver'), /data-verified-uid="u-alias-1"/);
 
-  // Self-messaging (Saved Messages) SQL + UI contracts
-  const mig115 = read('database/migrations/20261118_115_self_messaging.sql');
-  assert.match(mig115, /user_a <= user_b/i);
-  assert.match(mig115, /start_or_open_direct_chat\(/i);
-  assert.match(mig115, /send_chat_message\(/i);
-  assert.match(mig115, /get_social_user_profile\(/i);
-  assert.match(mig115, /search_social_users\(/i);
-  assert.match(messagesJs, /function isSelfUser\(/);
-  assert.match(messagesJs, /Message yourself/);
-  assert.match(messagesJs, /Personal notes, reminders, photos, and files saved here/);
-  assert.match(css, /\.msg-self-pill\s*\{/);
-
-  // Empty conversation hero + deferred outgoing request banner until first message sent
-  assert.match(messagesJs, /is-empty-intro/);
-  assert.match(messagesJs, /msg-thread-welcome-hero/);
-  assert.match(messagesJs, /!isSelfHero \? `<div class="msg-welcome-meta"/);
-  assert.match(messagesJs, /isPendingReq && hasSentMessages/);
-  assert.match(css, /\.msg-thread-header\.is-empty-intro\s+\.msg-thread-header-left\s+>\s+:not\(\.msg-back-mobile-btn\)/);
-
-  // Composer hides desktop scrollbar arrows; minimal DP viewer opens only for real DPs and closes on outside click
-  assert.match(messagesJs, /el\.style\.overflowY\s*=\s*el\.scrollHeight\s*>\s*140\s*\?\s*'auto'\s*:\s*'hidden'/);
-  assert.match(messagesJs, /function dpPreviewTriggerHtml\([\s\S]*data-view-dp-src/);
-  assert.match(messagesJs, /heroAvatarNode = conv\.anonymous_enabled \? heroAvatar : dpPreviewTriggerHtml\(conv\.avatar_url/);
-  assert.match(messagesJs, /dpPreviewTriggerHtml\(profile\?\.avatar_url/);
-  assert.match(messagesJs, /dpPreviewTriggerHtml\(initializedProfile\?\.avatar_url/);
-  assert.match(messagesJs, /peerDpUrl[\s\S]*data-view-dp-src/);
-  assert.match(css, /\.msg-pop-head \.msg-dp-preview-trigger\s*\{\s*flex-shrink:\s*0;\s*\}/);
-  assert.match(css, /#msg-composer-input\s*\{[^}]*overflow-y:\s*hidden;[^}]*scrollbar-width:\s*none;/);
-  assert.match(css, /#msg-composer-input::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/);
-  assert.match(css, /\.dp-viewer-dialog\s*\{/);
-  assert.match(css, /\.dp-viewer-dialog\s+img\s*\{[^}]*border-radius:\s*0;/);
   assert.match(css, /\.sidebar-user-name\s*\{\s*display:\s*block;\s*\}/);
   assert.match(css, /#quick-account-name\s*\{\s*display:\s*block;\s*\}/);
-  assert.match(css, /\.msg-welcome-name\s*\{[^}]*display:\s*block;/);
-  assert.match(messagesJs, /function openDpViewer\(/);
   assert.match(coreJs, /MAX_AVATAR_BYTES\s*=\s*8\s*\*\s*1024\s*\*\s*1024/);
   assert.match(coreJs, /function prepareAvatarDataUrl[\s\S]*?skipCompressBytes:\s*MAX_AVATAR_BYTES/);
   assert.match(coreJs, /nativeCropEdge[\s\S]*?Math\.min\(2400,\s*nativeCropEdge\)/);
@@ -544,17 +498,10 @@ test('My Account verified badge card lets members message the creator directly w
 
 test('verified badge stays glued beside surname and fits single-line name headers without detaching', () => {
   const css = read('css/app.css');
-  const messagesJs = read('js/messages.js');
 
-  assert.match(css, /\.msg-thread-peer-title\s*\{[^}]*flex-wrap:\s*nowrap;/);
-  assert.match(css, /\.msg-thread-peer-title strong\s*\{[^}]*display:\s*inline-flex;[^}]*flex-wrap:\s*nowrap;[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-tail\s*\{[^}]*white-space:\s*nowrap;/);
   assert.match(css, /\.verified-name-text\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/);
-  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(conv\)\)\}<\/span>\$\{isGrp \|\| conv\.anonymous_enabled \? '' : userBadgesHtml\(conv\)\}<\/strong>/);
-  assert.match(messagesJs, /class="msg-thread-peer-name"[^>]*><span class="verified-name-text">\$\{escapeHtml\(convDisplayTitle\(peer\)\)\}<\/span>\$\{isGrp \|\| peer\.anonymous_enabled \? '' : userBadgesHtml\(peer\)\}<\/strong>/);
-  assert.doesNotMatch(messagesJs, /class="msg-thread-peer-sub"[\s\S]{0,180}msg-handle-chip/);
-  assert.match(messagesJs, /<strong class="msg-conv-name"><span class="msg-conv-name-text">\$\{escapeHtml\(u\.full_name \|\| 'User'\)\}<\/span>\$\{userBadgesHtml\(u\)\}<\/strong>/);
-  assert.match(messagesJs, /fitVerifiedNameLines\?\.\(headerEl\)/);
+  assert.match(css, /\.effects-card-name,\s*#quick-account-name,\s*\.sidebar-user-name,\s*#my-name\s*\{[^}]*display:\s*inline-flex;[^}]*flex-wrap:\s*nowrap;/);
 
   const { ipon, ctx } = runCoreInVm(async () => ({ data: null, error: null }));
   assert.equal(typeof ipon.fitVerifiedNameLines, 'function');
@@ -617,8 +564,8 @@ test('verified badge stays glued beside surname and fits single-line name header
       },
       matches(sel) {
         return String(sel).split(',').map((s) => s.trim()).some((part) => {
-          if (part === '#msg-pop-name') return this.id === 'msg-pop-name';
-          if (part === '.msg-thread-peer-title strong') return this.tagName === 'STRONG' && this.classList.contains('msg-thread-peer-name');
+          if (part === '#quick-account-name') return this.id === 'quick-account-name';
+          if (part === '#my-name') return this.id === 'my-name';
           if (part.startsWith('.')) return this.classList.contains(part.slice(1));
           return false;
         });
@@ -652,9 +599,9 @@ test('verified badge stays glued beside surname and fits single-line name header
   ctx.document.createTextNode = (val) => makeNode('', { nodeType: 3, nodeValue: String(val) });
   ctx.window.getComputedStyle = (el) => ({ fontSize: el.style.fontSize || '15px' });
 
-  // 1) Long thread header full name scales font size to fit on one straight line beside badge
+  // 1) Long account header full name scales font size to fit on one straight line beside badge
   const root = makeNode('div');
-  const headerStrong = makeNode('strong', { className: 'msg-thread-peer-name' });
+  const headerStrong = makeNode('strong', { id: 'quick-account-name' });
   const nameSpan = makeNode('span', { className: 'verified-name-text' });
   nameSpan.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
   Object.defineProperty(nameSpan, 'clientWidth', { get: () => 170 });
@@ -669,8 +616,8 @@ test('verified badge stays glued beside surname and fits single-line name header
   headerStrong.appendChild(headerBadge);
   root.appendChild(headerStrong);
 
-  // 2) Short thread header name stays at base CSS font size
-  const shortStrong = makeNode('strong', { className: 'msg-thread-peer-name' });
+  // 2) Short sidebar name stays at base CSS font size
+  const shortStrong = makeNode('strong', { className: 'sidebar-user-name' });
   const shortSpan = makeNode('span', { className: 'verified-name-text' });
   shortSpan.appendChild(ctx.document.createTextNode('Juan Cruz'));
   Object.defineProperty(shortSpan, 'clientWidth', { get: () => 170 });
@@ -679,11 +626,11 @@ test('verified badge stays glued beside surname and fits single-line name header
   shortStrong.appendChild(makeNode('span', { className: 'verified-badges-inline' }));
   root.appendChild(shortStrong);
 
-  // 3) Popover name with raw text node wraps text cleanly in .verified-name-text
-  const popStrong = makeNode('strong', { id: 'msg-pop-name' });
-  popStrong.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
-  popStrong.appendChild(makeNode('span', { className: 'verified-badges-inline' }));
-  root.appendChild(popStrong);
+  // 3) Profile card name with raw text node wraps text cleanly in .verified-name-text
+  const cardStrong = makeNode('strong', { className: 'effects-card-name' });
+  cardStrong.appendChild(ctx.document.createTextNode('Frank Lawrenze Ulog Talipan'));
+  cardStrong.appendChild(makeNode('span', { className: 'verified-badges-inline' }));
+  root.appendChild(cardStrong);
 
   // 4) Wrapping table cell glues surname + verified badge into .verified-name-tail
   const tdStrong = makeNode('strong');
@@ -696,8 +643,8 @@ test('verified badge stays glued beside surname and fits single-line name header
 
   assert.equal(headerStrong.style.fontSize, '12.5px', 'Long full name should scale smoothly so full name + badge fit on one line');
   assert.equal(shortStrong.style.fontSize, '', 'Short name should retain base CSS font size');
-  assert.equal(popStrong.children[0].className, 'verified-name-text', 'Popover name text should be wrapped in .verified-name-text');
-  assert.equal(popStrong.getAttribute('title'), 'Frank Lawrenze Ulog Talipan');
+  assert.equal(cardStrong.children[0].className, 'verified-name-text', 'Effects card name text should be wrapped in .verified-name-text');
+  assert.equal(cardStrong.getAttribute('title'), 'Frank Lawrenze Ulog Talipan');
   assert.equal(tdStrong.childNodes[0].nodeValue, 'Frank Lawrenze Ulog ');
   assert.equal(tdStrong.childNodes[1].className, 'verified-name-tail', 'Surname + verified badge must be glued inside .verified-name-tail');
   assert.equal(tdStrong.childNodes[1].textContent, 'Talipan');

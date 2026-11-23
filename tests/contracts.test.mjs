@@ -18,7 +18,6 @@ test('all browser scripts pass syntax validation', () => {
 
 test('large JPEG and static PNG uploads use bounded WebP only when it saves space', async () => {
   const core = read('js/core.js');
-  const messages = read('js/messages.js');
   const helper = core.match(/  async function optimizeUploadImage\(file\) \{[\s\S]*?\n  \}/)?.[0];
   assert.ok(helper);
   function makeFile(parts, name, options) {
@@ -59,7 +58,6 @@ test('large JPEG and static PNG uploads use bounded WebP only when it saves spac
   const gif = { ...input, type: 'image/gif' };
   assert.equal(await optimize(gif), gif);
   assert.match(core, /files: media\.map\(\(entry\) => \(\{ name: entry\.file\.name/);
-  assert.match(messages, /entry\.file = await ipon\(\)\.optimizeUploadMedia\(entry\.file\)/);
 });
 
 test('MP4 and MP3 uploads use smaller playable encodes before signing and retain originals on failure', async () => {
@@ -98,14 +96,12 @@ test('MP4 and MP3 uploads use smaller playable encodes before signing and retain
   assert.equal(await optimize(mp4), mp4);
   assert.equal(await optimize({ ...mp4, name: 'notes.pdf', type: 'application/pdf' }).then((file) => file.name), 'notes.pdf');
   assert.match(core, /files: media\.map\(\(entry\) => \(\{ name: entry\.file\.name/);
-  assert.match(read('js/messages.js'), /entry\.file = await ipon\(\)\.optimizeUploadMedia\(entry\.file\)/);
   assert.match(read('vercel.json'), /wasm-unsafe-eval/);
 });
 
 test('profile card cover and theme persist with owner-only edits and storage cleanup', () => {
   const migration = read('database/migrations/20261118_116_profile_card_appearance.sql');
   const core = read('js/core.js');
-  const messages = read('js/messages.js');
   const edge = read('supabase/functions/manage-account/index.ts');
   const css = read('css/app.css');
   assert.match(migration, /where id = auth\.uid\(\) and status = 'ACTIVE'/);
@@ -118,15 +114,11 @@ test('profile card cover and theme persist with owner-only edits and storage cle
   assert.match(core, /uploadMediaDataUrl\(croppedDataUrl,\s*\{\s*category,\s*name:\s*uploadName\s*\}\)/);
   assert.match(core, /rpc\('update_own_profile_card', \{ p_cover_url: url \}\)/);
   assert.match(core, /rpc\('update_own_profile_card', \{ p_clear_cover: true \}\)/);
-  assert.match(messages, /rpc\('get_profile_card_appearance', \{ p_target_id: targetId \}\)/);
-  assert.match(messages, /delete pop\.dataset\.cardTheme/);
-  assert.match(css, /\.msg-pop-cover\{/);
   assert.match(css, /\.effects-dock button:focus-visible\s*\{/);
   assert.doesNotMatch(core, /class="account-card-colors"/);
   assert.match(css, /\.notification-dialog\{[^}]*overflow:hidden/);
   assert.match(css, /\.notification-sheet\{[^}]*overflow:hidden;border-radius:inherit/);
   assert.match(css, /html\[data-theme="dark"\] \.account-cover-actions \.button\b/);
-  assert.match(css, /html\[data-theme="dark"\] \.msg-profile-popover:has\(\.msg-pop-cover\) \.msg-pop-head \.avatar-circle\.avatar-lg\b/);
 });
 
 test('database keeps financial writes behind RLS and reviewed RPCs', () => {
@@ -437,13 +429,13 @@ test('login provides development, terms, and privacy disclosures', () => {
   assert.match(html, /IPON is still under active development/);
   assert.match(html, /data-policy-open="terms"/);
   assert.match(html, /data-policy-open="privacy"/);
-  assert.match(html, /Last updated: November 22, 2026/);
-  assert.match(html, /90-day chat &amp; operational TTL|older than 90 days/i);
+  assert.match(html, /Last updated: November 23, 2026/);
+  assert.match(html, /90 days/i);
   assert.match(html, /6-month inactive accounts|inactive for 6 months/i);
   assert.match(html, /7 days prior|7-day prior email notice/i);
   assert.match(html, /financial_annual_archives|annual net-savings summaries/i);
   assert.match(html, /ipon-media/);
-  assert.match(html, /capped at 500 characters/i);
+  assert.match(html, /capped at (?:<strong>)?500 characters/i);
   assert.match(html, /body\.is-request-mode :is\(\.development-notice,\.login-legal\)\{display:none\}/);
   assert.match(html, /<dialog class="policy-dialog" id="policy-dialog" aria-labelledby="policy-title">/);
   assert.match(html, /tracking system only and does not hold, transfer, receive, or safeguard money/);
@@ -1295,7 +1287,7 @@ test('Super Admin feature requests display requester avatars without Online/Last
   assert.match(script, /table-user-avatar/);
   assert.match(script, /select\('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at(?:,[^']*)?'\)/);
 
-  assert.match(core, /ipon-active-presence/);
+  assert.doesNotMatch(core, /ipon-active-presence/);
   assert.match(core, /avatar-presence-wrap/);
   assert.doesNotMatch(core, /isUserOnline|syncPresenceDots|presence-dot|touch_user_last_seen/);
   assert.match(dashHtml, /avatar-presence-wrap/);
@@ -1921,7 +1913,7 @@ test('announcement reaction notifications replace or remove prior reaction entri
   assert.match(schema, /after insert or update or delete on public\.announcement_reactions/i);
   assert.match(schema, /20261114_051/);
 
-  assert.match(coreJs, /select\('id,group_id,type,title,message,link,dedupe_key,read_at,created_at'\)/);
+  assert.match(coreJs, /id,group_id,type,title,message,link,dedupe_key,read_at,created_at/);
   assert.match(coreJs, /event: '\*', schema: 'public', table: 'notifications'/);
   assert.match(coreJs, /realtimePayload\?\.eventType !== 'DELETE'/);
 });
@@ -5878,1174 +5870,6 @@ test('migration 075 restores group summary RPC and read-only group transparency 
   assert.match(migration075, /create policy members_select on public\.members[\s\S]*?deleted_at is null/i);
 });
 
-test('migration 076, 077, Edge Function, shell integration, and UI implement Messaging & Social Connections cleanly with Super Admin excluded', async () => {
-  const migration076 = read('database/migrations/20261115_076_messaging_and_social_system.sql');
-  const migration077 = read('database/migrations/20261115_077_messaging_delivery_receipts.sql');
-  const schema = read('database/schema.sql');
-  const edge = read('supabase/functions/manage-account/index.ts');
-  const core = read('js/core.js');
-  const messagesJs = read('js/messages.js');
-  const sw = read('sw.js');
-  const appCss = read('css/app.css');
-  const heroCss = read('css/hero-plates.css');
-  const vercel = read('vercel.json');
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-
-  // 1. SQL schema & Super Admin complete exclusion + MFA + private storage bucket
-  for (const sql of [migration076, schema]) {
-    assert.match(sql, /'20261115_076'/);
-    assert.match(sql, /create or replace function public\.is_messaging_eligible\(/i);
-    assert.match(sql, /role in \('ADMIN', 'TREASURER', 'MEMBER'\)/i);
-    assert.match(sql, /create or replace function public\.is_user_blocked_between\(/i);
-  }
-  for (const sql of [migration077, schema]) {
-    assert.match(sql, /'20261115_077'/);
-    assert.match(sql, /values\s*\(\s*v_msg\.id,\s*v_peer_id,\s*null,\s*null\s*\)/i);
-    assert.match(sql, /create or replace function public\.mark_messages_delivered\(/i);
-    assert.match(sql, /delivered_at\s*=\s*coalesce\(mr\.delivered_at,\s*now\(\)\)/i);
-  }
-  assert.match(migration077, /alter table public\.message_receipts\s+alter column delivered_at drop not null/i);
-  assert.match(migration077, /grant execute on function[\s\S]*?public\.mark_messages_delivered\(uuid\)[\s\S]*?to authenticated/i);
-  for (const tbl of [
-    'blocked_users',
-    'friend_requests',
-    'friendships',
-    'conversations',
-    'conversation_participants',
-    'messages',
-    'message_attachments',
-    'message_reactions',
-    'message_receipts',
-    'call_sessions'
-  ]) {
-    assert.match(migration076, new RegExp(`create policy social_exclude_super_admin on public\\.${tbl}[\\s\\S]*?as restrictive[\\s\\S]*?mfa_access_allowed\\(\\)`, 'i'));
-    assert.match(migration076, new RegExp(`'${tbl}'`, 'i'));
-  }
-  assert.match(migration076, /execute format\('alter publication supabase_realtime add table public\.%I', v_tbl\)/i);
-  assert.match(migration076, /values\s*\('chat-attachments',\s*'chat-attachments',\s*false,\s*52428800/i);
-  assert.match(migration076, /when o\.sender_id = v_uid and v_share_receipts then/i);
-
-  // 2. Edge Function attachment signing and cleanup (calls/VC disabled)
-  for (const action of ['chat-upload-urls', 'chat-view-urls', 'chat-cleanup-media']) {
-    assert.match(edge, new RegExp(`body\\.action === '${action}'`));
-  }
-  assert.doesNotMatch(edge, /webrtc-ice-servers|TURN_SERVER_URLS/);
-  assert.match(edge, /ALLOWED_CHAT_EXT_RE/);
-  assert.match(edge, /BLOCKED_DISCUSSION_EXT_RE/);
-  assert.match(edge, /signedUrl:\s*data\.signedUrl/);
-
-  // 3. Reserved slot integration across shell & desktop dashboard (excluded from Super Admin)
-  assert.match(read('dashboard.html'), /id="dashboard-group-actions"[\s\S]*?data-messages-open[\s\S]*?data-notifications-open/);
-  assert.doesNotMatch(read('super-admin.html'), /js\/messages\.js/);
-  for (const page of ['dashboard.html', 'user.html', 'members.html', 'contributions.html', 'expenses.html', 'withdrawals.html', 'savings.html', 'reports.html', 'audit.html', 'settings.html', 'account.html']) {
-    assert.match(read(page), /js\/messages\.js\?v=\d+/);
-  }
-  assert.match(core, /data-messages-open/);
-  assert.match(core, /function syncMessagesBadges\(/);
-  assert.doesNotMatch(core, /function setOnlineVisibility\(/);
-  assert.match(core, /window\.IponMessages\?\.openFromNotification/);
-  assert.match(core, /role !== 'SUPER_ADMIN'[\s\S]*?window\.IponMessages\?\.init\?\.\(profile\)/);
-  assert.match(sw, /'js\/messages\.js'/);
-
-  // 4. Frontend messaging features, direct uploads, & camera/VC removal
-  assert.match(messagesJs, /xhr\.send\((?:entry\.file|body)\)/);
-  assert.doesNotMatch(messagesJs, /prepareImageDataUrl|canvas\.toBlob/);
-  assert.doesNotMatch(messagesJs, /CallManager|data-start-call|msg-call-dialog|msg-incoming-call-dialog/);
-  assert.match(messagesJs, /download_path:\s*path/);
-  assert.match(messagesJs, /ev\.isComposing\s*\|\|\s*ev\.keyCode\s*===\s*229/);
-  assert.match(messagesJs, /id="msg-profile-popover"/);
-  assert.match(messagesJs, /ipon\(\)\.confirmAction\(/);
-  assert.doesNotMatch(messagesJs, /\bwindow\.(alert|confirm|prompt)\s*\(/);
-  assert.match(messagesJs, /id="msg-friends-btn"[^>]*data-msg-tab="friends"[\s\S]*?id="msg-tab-friends-badge"/);
-  assert.match(messagesJs, /data-msg-filter="inbox"[\s\S]*?data-msg-filter="unread"[\s\S]*?data-msg-filter="requests"[\s\S]*?id="msg-tab-req-badge"[\s\S]*?data-msg-filter="archived"/);
-  assert.match(messagesJs, /id="msg-friends-back-btn"[^>]*data-msg-tab="chats"/);
-  assert.doesNotMatch(messagesJs, /data-msg-tab="discover"|id="msg-view-discover"|class="msg-brand-icon"|class="msg-tabs"|id="msg-workspace-subtitle"/);
-  assert.match(messagesJs, /id="msg-list-search"[\s\S]*?id="msg-list-search-clear"[\s\S]*?id="msg-new-chat-btn"/);
-  assert.doesNotMatch(messagesJs, /setBusy\s*\(\s*sendBtn/);
-  assert.match(messagesJs, /data-pending-retry[\s\S]*?data-pending-delete/);
-  assert.match(messagesJs, /p\.status === 'queued' \? 'Queued…'/);
-  assert.match(messagesJs, /p\.status === 'sent'[\s\S]*?msg-tick is-sent/);
-  assert.match(messagesJs, /MAX_QUEUE_ATTACHMENTS\s*=\s*30/);
-  assert.match(messagesJs, /COIN_SENDING_SVG[\s\S]*?COIN_SENT_SVG[\s\S]*?COIN_DELIVERED_SVG[\s\S]*?COIN_SEEN_SVG/);
-  assert.match(messagesJs, /id="msg-typing-live"[\s\S]*?class="msg-typing-text"[^>]*>is typing<span class="msg-typing-dots">/);
-  assert.match(messagesJs, /class="msg-video-player"[\s\S]*?class="msg-att-video"[\s\S]*?class="msg-video-controls"[\s\S]*?class="msg-video-seek"[\s\S]*?data-vact="play"[\s\S]*?data-vact="mute"[\s\S]*?data-vact="fs"[\s\S]*?data-vact="menu"/);
-  assert.doesNotMatch(messagesJs, /<video controls\b|<audio controls\b/);
-  assert.match(messagesJs, /class="msg-voice-card"[\s\S]*?data-aact="play"[\s\S]*?class="msg-voice-wave"[\s\S]*?data-aact="mute"[\s\S]*?class="msg-att-audio"/);
-  assert.match(messagesJs, /has-top-media[\s\S]*?has-audio-only|has-audio-only[\s\S]*?has-top-media/);
-  assert.match(messagesJs, /class="msg-bubble-body-pad"/);
-  assert.match(messagesJs, /function buildMetaHtml\(/);
-  assert.doesNotMatch(messagesJs, /lastShownClockKey/);
-  assert.match(messagesJs, /is-media-only/);
-  assert.match(messagesJs, /is-media-overlay/);
-  assert.match(messagesJs, /is-tick-only/);
-  assert.match(messagesJs, /data-ctx-do="download"[\s\S]*?if\s*\(\s*op\s*===\s*'download'/);
-  assert.match(messagesJs, /MSG_REACT_SVG[\s\S]*?MSG_REPLY_SVG[\s\S]*?MSG_MORE_SVG[\s\S]*?MSG_PLUS_SVG/);
-  assert.match(messagesJs, /function closeFloatingMenus\(/);
-  assert.match(messagesJs, /data-react-expand/);
-  assert.doesNotMatch(messagesJs, /data-react-more-ctx|>More…<|Suggestions|get_friend_suggestions|View suggestions/);
-  assert.match(messagesJs, /class="msg-friends-hero"[\s\S]*?class="msg-friends-tabs"[\s\S]*?data-friends-sub="all"[\s\S]*?data-friends-sub="incoming"[\s\S]*?data-friends-sub="sent"/);
-  assert.match(messagesJs, /setTimeout\([\s\S]*?'is-highlight-focus'[\s\S]*?3600\)/);
-  assert.doesNotMatch(messagesJs, /msg-att-file-foot|Original<\/a>/);
-  assert.match(vercel, /"Permissions-Policy"[\s\S]*?camera=\(\),\s*microphone=\(self\)/);
-  assert.doesNotMatch(manifest, /android\.permission\.CAMERA/);
-  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
-  assert.match(manifest, /android\.permission\.MODIFY_AUDIO_SETTINGS/);
-
-  // 5. CSS responsive layout, circular X geometry, dark theme & badge hiding
-  assert.match(appCss, /\.msg-dialog,[\s\S]*?font-family:\s*system-ui/);
-  assert.match(appCss, /\.msg-topbar\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/);
-  assert.match(appCss, /\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?justify-self:\s*end;/);
-  assert.match(appCss, /\.msg-topbar-actions\s+\.msg-icon-btn\s*\{[\s\S]*?border-radius:\s*50%;/);
-  assert.match(appCss, /\.msg-filter-pills\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
-  assert.match(appCss, /\.msg-mini-close,\s*\.msg-queue-remove,\s*\.msg-pop-close\s*\{[^}]*flex:\s*0\s+0\s+26px\s*!important;[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
-  assert.match(appCss, /\.msg-upload-queue\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
-  assert.match(appCss, /\.msg-attachments\.is-carousel\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
-  assert.match(appCss, /\.msg-row\.is-failed\s+\.msg-bubble[\s\S]*?background:\s*#c62828\s*!important/);
-  assert.match(appCss, /\.msg-tick\.is-sent\s*\{[\s\S]*?\.msg-tick\.is-delivered,[\s\S]*?\.msg-tick\.is-read\s*\{/);
-  assert.match(appCss, /\.msg-typing-live\.is-visible\s*\{[\s\S]*?grid-template-rows:\s*1fr;/);
-  assert.match(appCss, /\.msg-typing-text\s*\{[\s\S]*?font-style:\s*italic;/);
-  assert.match(appCss, /@keyframes\s+msgTypingDot\s*\{/);
-  assert.match(appCss, /\.msg-video-controls\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?\.msg-video-player\.is-controls-visible\s+\.msg-video-controls\s*\{[\s\S]*?opacity:\s*1;/);
-  assert.match(appCss, /\.msg-video-seek\s*\{[\s\S]*?#e5c994/);
-  assert.match(appCss, /\.msg-bubble\.has-top-media\s*\{[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;/);
-  assert.match(appCss, /\.msg-bubble\.has-audio-only[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;/);
-  assert.match(appCss, /\.msg-voice-card\s*\{[\s\S]*?#0d1f19[\s\S]*?\.msg-voice-play-btn\s*\{[\s\S]*?#e2c385[\s\S]*?\.msg-voice-wave-bar\.is-played\s*\{[\s\S]*?#e2c385/);
-  assert.match(appCss, /\.msg-row\.is-highlight-focus,\s*\.msg-system-event\.is-highlight-focus\s*\{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?box-shadow:\s*none\s*!important;/);
-  assert.match(appCss, /@keyframes\s+msgFocusGlow\s*\{[\s\S]*?3\.4s cubic-bezier|msgFocusGlow\s+3\.4s\s+cubic-bezier/s);
-  assert.match(appCss, /@keyframes\s+msgFocusGlowDark\s*\{/);
-  assert.match(appCss, /@keyframes\s+appFocusFade\s*\{/);
-  assert.match(appCss, /@media\s*\(hover:\s*none\),\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions\s+\.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;/);
-  assert.match(appCss, /\.msg-bubble-col\s*\{[\s\S]*?calc\(100% - 46px\)[\s\S]*?\.msg-bubble-wrap\s*\{[\s\S]*?gap:\s*6px;/);
-  assert.match(appCss, /\.msg-voice-card\s*\{[\s\S]*?min-width:\s*0;/);
-  assert.match(appCss, /\.msg-react-strip\s*\{[\s\S]*?\.msg-react-btn\.is-selected\s*\{[\s\S]*?\.msg-react-palette\s*\{/);
-  assert.match(appCss, /@keyframes\s+msgWaveDot\s*\{/);
-  assert.match(appCss, /\.msg-search-clear\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s);
-  assert.match(appCss, /\.msg-dialog\[open\]/);
-  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-topbar-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*end;/s);
-  assert.doesNotMatch(appCss, /\.msg-topbar::before\s*\{|\.msg-tabs\s*\{/);
-  assert.match(appCss, /@media\s*\(max-width:\s*820px\)\s*\{[\s\S]*?\.msg-chat-layout\.is-mobile-thread\s+\.msg-sidebar\s*\{\s*display:\s*none/s);
-  assert.match(appCss, /\.sidebar-utility\s+\.notification-badge\[hidden\][\s\S]*?display:\s*none\s*!important/s);
-  assert.match(appCss, /\.msg-thread-skeleton\s*\{/);
-  assert.match(appCss, /\.msg-wave-dots\s*\{/);
-  assert.match(appCss, /@keyframes\s+msgShimmer\s*\{/);
-  assert.match(appCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.msg-skel/);
-  assert.match(heroCss, /\.group-bar-msg-btn\s*\{/);
-
-  // 6. Behavioral check of IponMessages utilities & SUPER_ADMIN guard in sandboxed VM
-  const { default: vm } = await import('node:vm');
-  const inserted = [];
-  const docStub = {
-    documentElement: { dataset: {} },
-    body: {
-      insertAdjacentHTML(_pos, html) { inserted.push(html); }
-    },
-    getElementById: () => null,
-    querySelectorAll: () => [],
-    addEventListener: () => { }
-  };
-  const winStub = {
-    Ipon: {
-      escapeHtml: (s) => String(s ?? ''),
-      rpc: async () => [],
-      client: null
-    },
-    addEventListener: () => { },
-    location: { search: '', href: 'https://example.test/dashboard.html' }
-  };
-  const ctx = {
-    window: winStub,
-    document: docStub,
-    location: winStub.location,
-    Map,
-    Set,
-    URLSearchParams,
-    navigator: {},
-    setInterval: () => 0,
-    clearInterval: () => { }
-  };
-  winStub.window = winStub;
-  vm.runInNewContext(messagesJs, ctx);
-  assert.equal(typeof winStub.IponMessages?.detectAttachmentKind, 'function');
-  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'photo.png', type: 'image/png' }), 'image');
-  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'receipt.pdf', type: 'application/pdf' }), 'document');
-  assert.equal(winStub.IponMessages.detectAttachmentKind({ name: 'voice.webm', type: 'audio/webm' }), 'audio');
-  assert.equal(winStub.IponMessages.formatBytes(2048), '2.0 KB');
-  await winStub.IponMessages.init({ id: '00000000-0000-0000-0000-000000000001', role: 'SUPER_ADMIN', status: 'ACTIVE' });
-  assert.equal(inserted.length, 0, 'SUPER_ADMIN must never mount messaging dialogs');
-
-  // 7. Regression guard against mark_conversation_read <-> realtime flicker loop
-  let createdNodes = [];
-  let mockSocialProfile = null;
-  const makeEl = (id) => {
-    const classes = new Set();
-    const attrs = new Map();
-    const cls = {
-      toggle: (c, force) => {
-        if (force === undefined ? !classes.has(c) : force) classes.add(c);
-        else classes.delete(c);
-      },
-      add: (c) => classes.add(c),
-      remove: (c) => classes.delete(c),
-      contains: (c) => classes.has(c)
-    };
-    let html = '';
-    const el = {
-      id,
-      hidden: false,
-      open: false,
-      value: '',
-      scrollTop: 100,
-      scrollHeight: 500,
-      clientHeight: 400,
-      dataset: {},
-      style: {},
-      classList: cls,
-      children: [],
-      setAttribute: (k, v) => attrs.set(k, String(v)),
-      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
-      getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230 }),
-      addEventListener: () => { },
-      focus: () => { },
-      select: () => { },
-      appendChild: (node) => { createdNodes.push(node); },
-      contains: () => false,
-      querySelectorAll: () => [],
-      querySelector: () => null,
-      showModal() { this.open = true; },
-      close() { this.open = false; }
-    };
-    Object.defineProperty(el, 'innerHTML', {
-      get: () => html,
-      set: (v) => {
-        html = String(v ?? '');
-        if (id === 'msg-messages-list' && html.includes('Loading conversation')) {
-          loadingFlashes += 1;
-          lastThreadSkeletonHtml = html;
-        }
-        if (id === 'msg-thread-header' && html.includes('msg-skel-icon')) {
-          lastLoadingHeaderHtml = html;
-        }
-      }
-    });
-    return el;
-  };
-
-  let loadingFlashes = 0;
-  let lastThreadSkeletonHtml = '';
-  let lastLoadingHeaderHtml = '';
-  const elements = new Map();
-  const getEl = (id) => {
-    if (!elements.has(id)) elements.set(id, makeEl(id));
-    return elements.get(id);
-  };
-
-  const rpcCalls = [];
-  const tableHandlers = new Map();
-  const broadcastHandlers = new Map();
-  const broadcastSent = [];
-  const sentBatches = [];
-  const downloadRequests = [];
-  const clickedAnchors = [];
-  const meId = '00000000-0000-0000-0000-000000000010';
-  const peerId = '00000000-0000-0000-0000-000000000020';
-  const convId = '00000000-0000-0000-0000-0000000000c1';
-  let threadMessages = [
-    { id: 'm1', conversation_id: convId, sender_id: peerId, body: 'hello', message_type: 'TEXT', created_at: '2026-11-15T10:02:00Z', attachments: [], reactions: [] }
-  ];
-  let pinnedMsgs = [];
-  let convUnread = 1;
-
-  const rtChannelMock = {
-    on(kind, filter, cb) {
-      if (kind === 'postgres_changes' && filter?.table) tableHandlers.set(filter.table, cb);
-      if (kind === 'broadcast' && filter?.event) broadcastHandlers.set(filter.event, cb);
-      return this;
-    },
-    subscribe() { return this; },
-    async send(payload) { broadcastSent.push(payload); return { status: 'ok' }; }
-  };
-
-  const docListeners = new Map();
-  const doc2 = {
-    documentElement: { dataset: {} },
-    visibilityState: 'visible',
-    body: { insertAdjacentHTML() { }, appendChild(node) { createdNodes.push(node); } },
-    createElement: (tag) => {
-      const classes = new Set();
-      let clsName = '';
-      const node = {
-        tagName: String(tag || '').toUpperCase(),
-        get className() { return clsName; },
-        set className(v) {
-          clsName = String(v ?? '');
-          classes.clear();
-          clsName.split(/\s+/).filter(Boolean).forEach((c) => classes.add(c));
-        },
-        innerHTML: '',
-        style: {},
-        dataset: {},
-        attributes: new Map(),
-        _palette: { hidden: true },
-        classList: {
-          add: (c) => { classes.add(c); clsName = [...classes].join(' '); },
-          remove: (c) => { classes.delete(c); clsName = [...classes].join(' '); },
-          toggle: (c, f) => {
-            if (f === undefined ? !classes.has(c) : f) classes.add(c);
-            else classes.delete(c);
-            clsName = [...classes].join(' ');
-          },
-          contains: (c) => classes.has(c)
-        },
-        setAttribute(k, v) { this.attributes.set(k, String(v)); },
-        getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; },
-        querySelector(sel) {
-          if (sel === '.msg-react-palette') return this._palette;
-          return null;
-        },
-        click() { clickedAnchors.push(this); },
-        remove() { createdNodes = createdNodes.filter((n) => n !== this); }
-      };
-      createdNodes.push(node);
-      return node;
-    },
-    getElementById: (id) => getEl(id),
-    querySelectorAll: (sel) => (sel.includes('msg-floating-menu') ? createdNodes.filter((n) => String(n.className).includes('msg-floating-menu')) : []),
-    querySelector: (sel) => (sel.includes('msg-react-menu')
-      ? createdNodes.find((n) => String(n.className).includes('msg-react-menu')) || null
-      : (sel.includes('msg-floating-menu') ? createdNodes.find((n) => String(n.className).includes('msg-floating-menu')) || null : null)),
-    addEventListener: (evName, fn) => {
-      if (!docListeners.has(evName)) docListeners.set(evName, []);
-      docListeners.get(evName).push(fn);
-    }
-  };
-  const toastCalls = [];
-  let setBusyCalls = 0;
-  let imageViewerOpened = 0;
-  let failNextSend = false;
-  let failNextUpload = false;
-  let nextSentSeq = 0;
-  const win2 = {
-    innerWidth: 1200,
-    innerHeight: 800,
-    Ipon: {
-      escapeHtml: (s) => String(s ?? ''),
-      optimizeUploadImage: async (file) => file,
-      initials: () => 'NJ',
-      isUserOnline: () => true,
-      bindAvatarFallbacks: () => { },
-      syncPresenceDots: () => { },
-      syncMessagesBadges: () => { },
-      openImageViewer: () => { imageViewerOpened += 1; },
-      setBusy: () => { setBusyCalls += 1; },
-      toast: (msg, kind = 'info') => toastCalls.push({ msg, kind }),
-      friendlyError: (e) => String(e?.message || e),
-      invokeAccountFunction: async (payload) => {
-        if (payload?.action === 'chat-upload-urls') {
-          if (failNextUpload) throw new Error('Upload link expired');
-          return {
-            uploads: (payload.files || []).map((f, idx) => ({
-              path: `${convId}/up-${idx}-${f.name}`,
-              token: `tok-${idx}`,
-              signedUrl: `https://upload.test/${idx}`,
-              name: f.name,
-              type: f.type
-            }))
-          };
-        }
-        if (payload?.action === 'chat-view-urls') {
-          if (payload.download_path) {
-            downloadRequests.push(payload);
-            return { downloadUrl: `https://cdn.example/dl/${encodeURIComponent(payload.download_path)}` };
-          }
-          return {
-            urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`]))
-          };
-        }
-        return {};
-      },
-      rpc: async (name, params) => {
-        rpcCalls.push(name);
-        if (name === 'start_or_open_direct_chat') {
-          return { id: convId, status: 'ACCEPTED', initiator_id: meId };
-        }
-        if (name === 'mark_messages_delivered') {
-          return 0;
-        }
-        if (name === 'send_chat_message') {
-          if (failNextSend) throw new Error('Network offline');
-          const id = `sent-${++nextSentSeq}`;
-          sentBatches.push((params?.p_attachments || []).length);
-          const row = {
-            id,
-            conversation_id: convId,
-            sender_id: meId,
-            body: params?.p_body || '',
-            message_type: params?.p_message_type || 'TEXT',
-            created_at: '2026-11-15T10:10:00Z',
-            delivered_at: null,
-            read_at: null,
-            attachments: params?.p_attachments || [],
-            reactions: []
-          };
-          threadMessages = [...threadMessages, row];
-          return { id };
-        }
-        if (name === 'get_conversations') {
-          return [{
-            id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false,
-            peer: { id: peerId, full_name: 'Nhicole Joy Gadia Antalan', allow_online_status: true },
-            unread_count: convUnread, marked_unread: false, last_message_at: '2026-11-15T10:02:00Z',
-            last_message_preview: threadMessages[threadMessages.length - 1].body, last_message_sender_id: peerId
-          }];
-        }
-        if (name === 'search_social_users') {
-          return [{ id: '00000000-0000-0000-0000-000000000030', full_name: 'Zedrick De Monteverde', username: 'zedrick', friendship_status: 'NONE' }];
-        }
-        if (name === 'search_conversation_messages') {
-          return [{ conversation_id: convId, message_id: 'm1', peer_name: 'Nhicole Joy Gadia Antalan', sender_name: 'Nhicole', body: 'hello world', created_at: '2026-11-15T10:02:00Z' }];
-        }
-        if (name === 'get_social_overview') return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
-        if (name === 'get_social_user_profile') {
-          return mockSocialProfile || {
-            id: params?.p_target_id || peerId,
-            full_name: 'Nhicole Joy Gadia Antalan',
-            username: 'nhicole',
-            bio: '',
-            avatar_url: '',
-            friendship_status: 'INCOMING_REQUEST',
-            friend_request_id: 'req-1',
-            can_message: true,
-            can_send_friend_request: false,
-            shared_groups: ['Ipon namin ni prettyynhic'],
-            mutual_friends_count: 0
-          };
-        }
-        if (name === 'mark_conversation_read') {
-          convUnread = 0;
-          // Simulate Postgres realtime echoes caused by mark_conversation_read
-          tableHandlers.get('conversation_participants')?.({ eventType: 'UPDATE', new: { conversation_id: convId, user_id: meId } });
-          tableHandlers.get('message_receipts')?.({ eventType: 'UPDATE', new: { message_id: 'm1', user_id: meId, read_at: '2026-11-15T10:05:00Z' } });
-          return { read_at: '2026-11-15T10:05:00Z', receipts_shared: true };
-        }
-        if (name === 'pin_chat_message') {
-          const pid = params?.p_message_id;
-          const exists = pinnedMsgs.some((p) => p.id === pid);
-          pinnedMsgs = exists ? pinnedMsgs.filter((p) => p.id !== pid) : [{ id: pid, body: threadMessages.find((m) => m.id === pid)?.body || '', pinned_at: '2026-11-15T10:15:00Z' }, ...pinnedMsgs];
-          return { id: pid, pinned_at: exists ? null : '2026-11-15T10:15:00Z' };
-        }
-        if (name === 'get_conversation_messages') {
-          return {
-            conversation: { id: peerId, conversation_id: convId, full_name: 'Nhicole Joy Gadia Antalan', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true },
-            has_older: false,
-            unread_first_id: convUnread > 0 ? 'm1' : null,
-            pinned_messages: pinnedMsgs,
-            messages: threadMessages
-          };
-        }
-        return [];
-      },
-      client: {
-        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
-        channel: () => rtChannelMock,
-        removeChannel: () => { }
-      }
-    },
-    addEventListener: () => { },
-    location: { search: '', href: 'https://example.test/dashboard.html' }
-  };
-  win2.window = win2;
-  vm.runInNewContext(messagesJs, {
-    window: win2, document: doc2, location: win2.location,
-    Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
-    URL: { createObjectURL: (f) => `blob:mock/${f?.name || 'file'}`, revokeObjectURL: () => { } },
-    CSS: { escape: (s) => String(s) },
-    XMLHttpRequest: class {
-      constructor() { this.upload = {}; this.status = 200; }
-      open() { }
-      setRequestHeader() { }
-      send() { this.upload.onprogress?.({ lengthComputable: true, loaded: 100, total: 100 }); this.onload?.(); }
-    },
-    requestAnimationFrame: (fn) => fn(),
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => { }
-  });
-
-  await win2.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
-  await win2.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
-  assert.equal(loadingFlashes, 1, 'initial thread load renders loading indicator exactly once');
-  assert.match(lastThreadSkeletonHtml, /msg-thread-skeleton[\s\S]*msg-wave-dots[\s\S]*msg-bubble-skel/);
-  assert.match(lastLoadingHeaderHtml, /Nhicole Joy Gadia Antalan/);
-  assert.doesNotMatch(lastLoadingHeaderHtml, /Syncing messages|msg-sync-dot/);
-  const markReadAfterOpen = rpcCalls.filter((r) => r === 'mark_conversation_read').length;
-  assert.equal(markReadAfterOpen, 1);
-
-  // User types a draft while self echoes & peer receipt update fire via realtime
-  getEl('msg-composer-input').value = 'typing reply';
-  await new Promise((r) => setTimeout(r, 320));
-  assert.equal(loadingFlashes, 1, 'self echoes must never flash Loading conversation');
-  assert.equal(rpcCalls.filter((r) => r === 'mark_conversation_read').length, 1, 'self echoes must never loop mark_conversation_read');
-
-  // Incoming peer message updates thread silently without flashing loading or wiping draft
-  threadMessages = [
-    ...threadMessages,
-    { id: 'm2', conversation_id: convId, sender_id: peerId, body: 'kamusta', message_type: 'TEXT', created_at: '2026-11-15T10:06:00Z', attachments: [], reactions: [] }
-  ];
-  convUnread = 1;
-  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm2', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 320));
-  assert.equal(loadingFlashes, 1, 'live incoming message updates silently without flashing Loading conversation');
-  assert.equal(getEl('msg-composer-input').value, 'typing reply', 'silent realtime refresh must preserve unsent composer draft');
-  assert.equal(rpcCalls.filter((r) => r === 'mark_conversation_read').length, 2, 'incoming peer message marks read once and settles');
-
-  // Unified inline sidebar search renders People + Messages without a separate top tab
-  const inputHandlers = docListeners.get('input') || [];
-  const clickHandlers = docListeners.get('click') || [];
-  inputHandlers.forEach((fn) => fn({ target: { id: 'msg-list-search', value: 'hello' } }));
-  await new Promise((r) => setTimeout(r, 240));
-  const listHtml = getEl('msg-conv-list').innerHTML;
-  assert.match(listHtml, /Zedrick De Monteverde/);
-  assert.match(listHtml, /Messages<\/span><b>1<\/b>/);
-  assert.equal(getEl('msg-filter-pills').hidden, true);
-  assert.equal(getEl('msg-list-search-clear').hidden, false);
-  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'back');
-
-  // Clear button inside search input cleanly clears & exits back to inbox without ReferenceError
-  const dispatchClick = async (matchSel, node = { dataset: {} }) => {
-    await Promise.all(clickHandlers.map((fn) => fn({
-      stopPropagation: () => { },
-      target: { closest: (sel) => (sel === matchSel ? node : null) }
-    })));
-  };
-  await dispatchClick('#msg-list-search-clear', getEl('msg-list-search-clear'));
-  assert.equal(getEl('msg-list-search').value, '');
-  assert.equal(getEl('msg-filter-pills').hidden, false);
-  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'compose');
-
-  // Rapid spam toggling of People directory / Back button never throws and omits useless Done banner
-  for (let i = 0; i < 4; i += 1) {
-    await dispatchClick('#msg-new-chat-btn', getEl('msg-new-chat-btn'));
-  }
-  await dispatchClick('#msg-new-chat-btn', getEl('msg-new-chat-btn'));
-  await new Promise((r) => setTimeout(r, 50));
-  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'back');
-  assert.equal(getEl('msg-list-search-clear').hidden, true);
-  assert.doesNotMatch(getEl('msg-conv-list').innerHTML, /msg-directory-done|>Done</);
-
-  // Tapping a user from directory opens direct chat cleanly with zero error toasts
-  await dispatchClick('[data-social-action]', { dataset: { socialAction: 'message', targetId: '00000000-0000-0000-0000-000000000030' } });
-  assert.equal(getEl('msg-new-chat-btn').dataset.mode, 'compose');
-  assert.equal(toastCalls.filter((t) => t.kind === 'error').length, 0);
-
-  // Optimistic Messenger-style sending, preserved send-button SVG, carousel strip & red failed Retry/Delete
-  const sendBtnEl = getEl('msg-send-btn');
-  const originalSendSvg = '<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/></svg>';
-  sendBtnEl.innerHTML = originalSendSvg;
-  const changeHandlers = docListeners.get('change') || [];
-  const submitHandlers = docListeners.get('submit') || [];
-
-  // Queue 2 attachments -> horizontal strip queue renders both cards
-  changeHandlers.forEach((fn) => fn({
-    target: {
-      id: 'msg-file-input',
-      value: 'selected',
-      files: [
-        { name: 'money.png', type: 'image/png', size: 22700 },
-        { name: 'receipt.pdf', type: 'application/pdf', size: 14200 }
-      ]
-    }
-  }));
-  assert.equal(getEl('msg-upload-queue').dataset.count, '2');
-  assert.match(getEl('msg-upload-queue').innerHTML, /money\.png[\s\S]*receipt\.pdf/);
-
-  // Submit queued media while upload fails -> queue clears, carousel + red failed bar render, Retry/Delete shown, send SVG intact
-  failNextUpload = true;
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(setBusyCalls, 0, 'send button must never be overwritten via setBusy');
-  assert.equal(sendBtnEl.innerHTML, originalSendSvg, 'send button SVG icon must stay intact');
-  assert.equal(getEl('msg-upload-queue').hidden, true);
-  let msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-row is-mine is-pending is-failed"/);
-  assert.match(msgsHtml, /class="msg-attachments is-carousel"/);
-  assert.match(msgsHtml, /Upload link expired/);
-  const failedMediaId = msgsHtml.match(/data-pending-delete="([^"]+)"/)?.[1];
-  assert.ok(failedMediaId);
-
-  // Clicking Delete removes the failed attachment bubble cleanly
-  await dispatchClick('[data-pending-delete]', { dataset: { pendingDelete: failedMediaId } });
-  await new Promise((r) => setTimeout(r, 20));
-  assert.doesNotMatch(getEl('msg-messages-list').innerHTML, /msg-row is-mine is-pending is-failed/);
-
-  // Submit text while RPC fails -> turns red with Retry; clicking Retry delivers and reconciles
-  failNextUpload = false;
-  failNextSend = true;
-  getEl('msg-composer-input').value = 'Failed ping test';
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(getEl('msg-composer-input').value, '');
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /Failed ping test[\s\S]*data-pending-retry="pending-/);
-  const failedTextId = msgsHtml.match(/data-pending-retry="([^"]+)"/)?.[1];
-  assert.ok(failedTextId);
-
-  failNextSend = false;
-  await dispatchClick('[data-pending-retry]', { dataset: { pendingRetry: failedTextId } });
-  await new Promise((r) => setTimeout(r, 40));
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /Failed ping test/);
-  assert.doesNotMatch(msgsHtml, /msg-row is-mine is-pending is-failed/);
-  assert.equal(setBusyCalls, 0);
-
-  // Delivery & read checkmarks: 1 gray check (Sent) -> 2 gray checks (Delivered) -> 2 green checks (Seen)
-  const sentRow = threadMessages[threadMessages.length - 1];
-  assert.ok(sentRow?.id, 'sent message row present');
-  assert.match(msgsHtml, /class="msg-tick is-sent(?:\s+is-anim)?"[\s\S]*?<svg class="msg-tick-svg is-coin-sent"/);
-
-  sentRow.delivered_at = '2026-11-15T10:10:05Z';
-  tableHandlers.get('message_receipts')?.({
-    eventType: 'UPDATE',
-    new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: null }
-  });
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-tick is-delivered(?:\s+is-anim)?"[\s\S]*?<svg class="msg-tick-svg is-coin-delivered"/);
-
-  sentRow.read_at = '2026-11-15T10:11:00Z';
-  tableHandlers.get('message_receipts')?.({
-    eventType: 'UPDATE',
-    new: { message_id: sentRow.id, user_id: peerId, delivered_at: sentRow.delivered_at, read_at: sentRow.read_at }
-  });
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-tick is-read(?:\s+is-anim)?"[\s\S]*?class="msg-seen-dp-coin"/);
-
-  // Batch splitting: queuing 12 files (>10, <=30) auto-splits into sequential batches of 10 + 2
-  const twelveFiles = Array.from({ length: 12 }, (_, idx) => ({
-    name: `photo-${idx + 1}.png`,
-    type: 'image/png',
-    size: 4096 + idx
-  }));
-  changeHandlers.forEach((fn) => fn({
-    target: { id: 'msg-file-input', value: 'selected', files: twelveFiles }
-  }));
-  assert.equal(getEl('msg-upload-queue').dataset.count, '12');
-  assert.match(toastCalls[toastCalls.length - 1]?.msg || '', /2 batches \(up to 10/);
-
-  const batchesBefore = sentBatches.length;
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
-  await new Promise((r) => setTimeout(r, 80));
-  assert.deepEqual(sentBatches.slice(batchesBefore), [10, 2]);
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.doesNotMatch(msgsHtml, /msg-att-file-foot|<figcaption|Original<\/a>/);
-
-  // Download lives in the 3-dots message menu & downloads batch attachments cleanly
-  const tenBatchMsg = threadMessages.find((m) => (m.attachments || []).length === 10);
-  assert.ok(tenBatchMsg);
-  createdNodes = [];
-  await dispatchClick('[data-msg-act]', {
-    dataset: { msgAct: 'menu', msgId: tenBatchMsg.id },
-    getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230 })
-  });
-  const ctxMenuNode = createdNodes.find((n) => String(n.className).includes('msg-ctx-menu'));
-  assert.ok(ctxMenuNode, 'context menu created for attachment message');
-  assert.match(ctxMenuNode.innerHTML, /data-ctx-do="reply"[^>]*>Reply</);
-  assert.match(ctxMenuNode.innerHTML, /data-ctx-do="download"[\s\S]*?Download all \(10\)/);
-  await dispatchClick('[data-ctx-do]', { dataset: { ctxDo: 'download', msgId: tenBatchMsg.id } });
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(downloadRequests.length, 10);
-  assert.equal(clickedAnchors.length, 10);
-
-  // Typing indicator: smooth .is-visible reveal, instant clear on peer INSERT, and stop on blur
-  broadcastHandlers.get('typing')?.({ payload: { conversationId: convId, user_id: peerId, typing: true } });
-  assert.equal(getEl('msg-typing-live').classList.contains('is-visible'), true);
-  assert.equal(getEl('msg-typing-live').getAttribute('aria-hidden'), 'false');
-
-  threadMessages = [
-    ...threadMessages,
-    { id: 'm3', conversation_id: convId, sender_id: peerId, body: 'got your photos!', message_type: 'TEXT', created_at: '2026-11-15T10:12:00Z', attachments: [], reactions: [] }
-  ];
-  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm3', conversation_id: convId, sender_id: peerId } });
-  assert.equal(getEl('msg-typing-live').classList.contains('is-visible'), false);
-  assert.equal(getEl('msg-typing-live').getAttribute('aria-hidden'), 'true');
-
-  getEl('msg-composer-input').value = 'drafting now';
-  inputHandlers.forEach((fn) => fn({ target: getEl('msg-composer-input') }));
-  assert.equal(broadcastSent.filter((b) => b?.payload?.typing === true).length >= 1, true);
-  const focusoutHandlers = docListeners.get('focusout') || [];
-  const falseBefore = broadcastSent.filter((b) => b?.payload?.typing === false).length;
-  focusoutHandlers.forEach((fn) => fn({ target: { id: 'msg-composer-input' } }));
-  assert.equal(broadcastSent.filter((b) => b?.payload?.typing === false).length, falseBefore + 1);
-
-  // Custom video player: renders without permanent native controls, shows floating controls on tap & auto-hides
-  changeHandlers.forEach((fn) => fn({
-    target: { id: 'msg-file-input', value: 'selected', files: [{ name: 'clip.mp4', type: 'video/mp4', size: 12000 }] }
-  }));
-  await Promise.all(submitHandlers.map((fn) => fn({ preventDefault: () => { }, target: getEl('msg-composer-form') })));
-  await new Promise((r) => setTimeout(r, 40));
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline/);
-  assert.doesNotMatch(msgsHtml, /class="msg-video-player is-controls-visible"|<video[^>]*\bcontrols\b/);
-  assert.match(msgsHtml, /class="msg-video-controls"[\s\S]*?data-vact="play"[\s\S]*?data-vact="mute"[\s\S]*?data-vact="fs"[\s\S]*?data-vact="menu"/);
-
-  const mockVideo = {
-    paused: true,
-    ended: false,
-    muted: false,
-    volume: 1,
-    duration: 10,
-    currentTime: 0,
-    play() { this.paused = false; return Promise.resolve(); },
-    pause() { this.paused = true; }
-  };
-  const mockPlayer = makeEl('mock-vid-player');
-  mockPlayer.querySelector = (sel) => (sel === 'video' ? mockVideo : null);
-  await dispatchClick('.msg-video-player', mockPlayer);
-  assert.equal(mockVideo.paused, false);
-  assert.equal(mockPlayer.classList.contains('is-controls-visible'), true);
-  await new Promise((r) => setTimeout(r, 2500));
-  assert.equal(mockPlayer.classList.contains('is-controls-visible'), false);
-
-  // Captionless media renders edge-to-edge without bottom slab, using frosted overlay meta; captioned media keeps body pad; voice card hides native controls
-  assert.match(msgsHtml, /class="msg-row is-mine[^"]*"[\s\S]*?class="msg-bubble has-top-media is-media-only"[\s\S]*?class="msg-bubble-meta is-media-overlay(?:\s+is-tick-only)?"/);
-  const mediaOnlyIdx = msgsHtml.indexOf('has-top-media is-media-only');
-  assert.ok(mediaOnlyIdx >= 0);
-  const mediaOnlyEnd = msgsHtml.indexOf('</article>', mediaOnlyIdx);
-  assert.doesNotMatch(msgsHtml.slice(mediaOnlyIdx, mediaOnlyEnd), /class="msg-bubble-body-pad"/);
-  assert.match(msgsHtml, /class="msg-bubble has-top-media"[\s\S]*?clip\.mp4[\s\S]*?class="msg-bubble-body-pad"[\s\S]*?drafting now/);
-
-  threadMessages = [
-    ...threadMessages,
-    {
-      id: 'm4',
-      conversation_id: convId,
-      sender_id: peerId,
-      body: '',
-      message_type: 'TEXT',
-      created_at: '2026-11-15T10:15:00Z',
-      attachments: [{ path: `${convId}/voice.webm`, name: 'voice.webm', kind: 'audio', duration_seconds: 6 }],
-      reactions: []
-    },
-    {
-      id: 'm5',
-      conversation_id: convId,
-      sender_id: meId,
-      body: 'First same-minute msg',
-      message_type: 'TEXT',
-      created_at: '2026-11-15T10:20:00Z',
-      delivered_at: null,
-      read_at: null,
-      reply_preview: { id: 'm1', sender_id: peerId, sender_name: 'Peer', body: 'original quote' },
-      attachments: [],
-      reactions: []
-    },
-    {
-      id: 'm6',
-      conversation_id: convId,
-      sender_id: meId,
-      body: 'Second same-minute msg',
-      message_type: 'TEXT',
-      created_at: '2026-11-15T10:20:42Z',
-      delivered_at: '2026-11-15T10:20:45Z',
-      read_at: null,
-      attachments: [],
-      reactions: []
-    },
-    {
-      id: 'm7',
-      conversation_id: convId,
-      sender_id: meId,
-      body: 'Receipt copy',
-      message_type: 'TEXT',
-      created_at: '2026-11-15T10:21:05Z',
-      delivered_at: '2026-11-15T10:21:06Z',
-      read_at: '2026-11-15T10:21:10Z',
-      attachments: [{ path: `${convId}/receipt.png`, name: 'receipt.png', kind: 'image' }],
-      reactions: []
-    }
-  ];
-  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm7', conversation_id: convId, sender_id: meId } });
-  await new Promise((r) => setTimeout(r, 320));
-  msgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.match(msgsHtml, /class="msg-bubble has-audio-only"[\s\S]*?class="msg-voice-card"[\s\S]*?0:00 \/ 0:06[\s\S]*?<audio class="msg-att-audio"/);
-  assert.doesNotMatch(msgsHtml, /<audio[^>]*\bcontrols\b/);
-
-  // Every message shows <time> even when sent in the same minute while preserving Sent / Delivered / Seen indicators, and reply quotes render outside/above the bottom bubble
-  const m5Pos = msgsHtml.indexOf('data-msg-id="m5"');
-  const m6Pos = msgsHtml.indexOf('data-msg-id="m6"');
-  const m7Pos = msgsHtml.indexOf('data-msg-id="m7"');
-  assert.ok(m5Pos >= 0 && m6Pos > m5Pos && m7Pos > m6Pos, 'ordered m5/m6/m7 rendered');
-  const m5Slice = msgsHtml.slice(m5Pos, m6Pos);
-  const m6Slice = msgsHtml.slice(m6Pos, m7Pos);
-  const m7Slice = msgsHtml.slice(m7Pos);
-  assert.match(m5Slice, /<div class="msg-bubble-col">\s*<button type="button" class="msg-reply-quote" data-jump-msg="m1">[\s\S]*?<\/button>\s*<div class="msg-bubble-wrap">\s*<div class="msg-bubble(?=["\s])/);
-  assert.doesNotMatch(m5Slice, /<div class="msg-bubble(?=["\s])[\s\S]*?class="msg-reply-quote"/);
-  assert.match(m5Slice, /<time\b[^>]*>[^<]+<\/time>/);
-  assert.match(m5Slice, /class="msg-tick is-sent"[^>]*aria-label="Sent"/);
-  assert.match(m6Slice, /<time\b[^>]*>[^<]+<\/time>/);
-  assert.match(m6Slice, /class="msg-bubble-meta"[\s\S]*?class="msg-tick is-delivered"[^>]*aria-label="Delivered"/);
-  assert.match(m7Slice, /<time\b[^>]*>[^<]+<\/time>/);
-  assert.match(m7Slice, /class="msg-tick is-read"[^>]*aria-label="Seen"/);
-  assert.match(m7Slice, /class="msg-bubble has-top-media"[\s\S]*?class="msg-bubble-body-pad"[\s\S]*?Receipt copy/);
-
-  const mockAudio = {
-    paused: true,
-    ended: false,
-    muted: false,
-    volume: 1,
-    duration: 6,
-    currentTime: 0,
-    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null),
-    play() { this.paused = false; return Promise.resolve(); },
-    pause() { this.paused = true; }
-  };
-  const mockVoiceBars = Array.from({ length: 10 }, () => makeEl('bar'));
-  const mockVoiceTime = { textContent: '0:00 / 0:06' };
-  const mockVoicePlayBtn = { innerHTML: '', setAttribute: () => { } };
-  const mockVoiceMuteBtn = { innerHTML: '', setAttribute: () => { } };
-  const mockVoiceWave = makeEl('mock-voice-wave');
-  mockVoiceWave.querySelectorAll = (sel) => (sel === '.msg-voice-wave-bar' ? mockVoiceBars : []);
-  mockVoiceWave.getBoundingClientRect = () => ({ left: 100, right: 300, width: 200, top: 0, bottom: 24 });
-  const mockVoiceCard = makeEl('mock-voice-card');
-  mockVoiceCard.dataset.dur = '6';
-  mockVoiceCard.querySelectorAll = () => [];
-  mockVoiceCard.querySelector = (sel) => ({
-    'audio.msg-att-audio': mockAudio,
-    '[data-aact="play"]': mockVoicePlayBtn,
-    '[data-aact="mute"]': mockVoiceMuteBtn,
-    '.msg-voice-wave': mockVoiceWave,
-    '.msg-voice-time': mockVoiceTime
-  }[sel] || null);
-  mockVoiceWave.closest = (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null);
-
-  await dispatchClick('[data-aact]', {
-    dataset: { aact: 'play' },
-    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null)
-  });
-  assert.equal(mockAudio.paused, false);
-  await Promise.all(clickHandlers.map((fn) => fn({
-    clientX: 200,
-    stopPropagation: () => { },
-    target: { closest: (sel) => (sel === '.msg-voice-wave' ? mockVoiceWave : null) }
-  })));
-  assert.equal(mockAudio.currentTime, 3);
-  assert.equal(mockVoiceTime.textContent, '0:03 / 0:06');
-  assert.equal(mockVoiceBars.filter((b) => b.classList.contains('is-played')).length, 5);
-
-  await dispatchClick('[data-aact]', {
-    dataset: { aact: 'mute' },
-    closest: (sel) => (sel === '.msg-voice-card' ? mockVoiceCard : null)
-  });
-  assert.equal(mockAudio.muted, true);
-
-  // Messenger-style floating reaction menu highlights user's active reaction, expands '+' palette, and exposes quick actions on mobile tap
-  threadMessages = threadMessages.map((m) => (m.id === 'm3' ? { ...m, reactions: [{ user_id: meId, emoji: '❤️' }] } : m));
-  tableHandlers.get('message_reactions')?.({ eventType: 'INSERT', new: { message_id: 'm3', user_id: meId, emoji: '❤️' } });
-  await new Promise((r) => setTimeout(r, 320));
-
-  createdNodes = [];
-  await dispatchClick('[data-msg-act]', {
-    dataset: { msgAct: 'react', msgId: 'm3' },
-    getBoundingClientRect: () => ({ left: 240, right: 270, top: 200, bottom: 230, width: 30 })
-  });
-  const reactMenuNode = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
-  assert.ok(reactMenuNode, 'clicking React opens upgraded floating reaction menu');
-  assert.match(reactMenuNode.innerHTML, /class="msg-react-strip"[\s\S]*?class="msg-react-btn is-selected"[^>]*data-react-emoji="❤️"/);
-  assert.match(reactMenuNode.innerHTML, /data-react-expand[\s\S]*?class="msg-react-palette"/);
-
-  // Expanding '+' reveals extra emojis in the floating palette while keeping menu open
-  const clickEl = (target) => Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: target?.closest ? target : { closest: () => null, ...target } })));
-  const expandBtnMock = {
-    closest: (sel) => (sel === '[data-react-expand]' ? expandBtnMock : (sel === '.msg-react-menu' || sel === '.msg-floating-menu' ? reactMenuNode : null)),
-    setAttribute: () => { }
-  };
-  await clickEl(expandBtnMock);
-  assert.equal(reactMenuNode._palette.hidden, false);
-  assert.equal(reactMenuNode.classList.contains('has-extra'), true);
-
-  // Outside click transitions open Pic 1 smoothly via .is-leaving and removes after exit duration
-  assert.equal(reactMenuNode.classList.contains('is-visible'), true);
-  await clickEl(makeEl('outside-stage'));
-  assert.equal(reactMenuNode.classList.contains('is-leaving'), true);
-  assert.equal(reactMenuNode.classList.contains('is-visible'), false);
-  assert.equal(reactMenuNode.getAttribute('aria-hidden'), 'true');
-  await new Promise((r) => setTimeout(r, 230));
-  assert.equal(createdNodes.some((n) => n === reactMenuNode), false);
-
-  // Quick tap does NOT auto-open reactions; hold (touch or stationary mouse) on message, picture, or video opens Pic 1 without triggering media open/play
-  win2.innerWidth = 390;
-  const pointerDownHandlers = docListeners.get('pointerdown') || [];
-  const pointerMoveHandlers = docListeners.get('pointermove') || [];
-  const pointerUpHandlers = docListeners.get('pointerup') || [];
-  const contextMenuHandlers = docListeners.get('contextmenu') || [];
-  const mockRow = makeEl('mock-row-m3');
-  mockRow.dataset.msgId = 'm3';
-  const mockBubble = makeEl('mock-bubble-m3');
-  mockRow.querySelector = (s) => (s === '.msg-bubble' ? mockBubble : null);
-  mockBubble.getBoundingClientRect = () => ({ left: 24, right: 240, top: 320, bottom: 370, width: 216 });
-  mockBubble.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : null));
-
-  createdNodes = [];
-  await clickEl(mockBubble);
-  assert.equal(createdNodes.some((n) => String(n.className).includes('msg-react-menu')), false, 'quick tap must not auto-open reaction pill');
-
-  // Hold text message bubble (touch) -> opens Pic 1 & suppresses trailing click
-  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'touch', clientX: 50, clientY: 50, target: mockBubble }));
-  await new Promise((r) => setTimeout(r, 410));
-  const textHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
-  assert.ok(textHoldMenu, 'holding a text bubble opens reactions floating strip');
-  assert.equal(textHoldMenu.classList.contains('is-visible'), true);
-  assert.match(textHoldMenu.innerHTML, /class="msg-react-strip"[\s\S]*?data-react-msg="m3"[\s\S]*?data-react-expand/);
-  assert.doesNotMatch(textHoldMenu.innerHTML, /msg-react-quick-actions|data-ctx-do="reply"|data-ctx-do="copy"|data-ctx-do="download"|data-react-more-ctx|More…/);
-  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'touch', target: mockBubble }));
-  await clickEl(mockBubble);
-  assert.equal(textHoldMenu.classList.contains('is-leaving'), false, 'trailing click after hold is suppressed');
-
-  // Dismiss cleanly before testing picture & video holds
-  await clickEl(makeEl('outside-stage'));
-  await new Promise((r) => setTimeout(r, 230));
-
-  // Picture: quick tap opens full-size viewer; hold opens Pic 1 WITHOUT opening viewer & ignores OS trailing contextmenu
-  const mockImgFigure = makeEl('mock-att-img');
-  mockImgFigure.getBoundingClientRect = () => ({ left: 24, right: 224, top: 200, bottom: 420, width: 200 });
-  mockImgFigure.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : (s === '.msg-att-image' || s === '.msg-att-image, .msg-video-player' ? mockImgFigure : null)));
-  const mockImgBtn = makeEl('mock-img-btn');
-  mockImgBtn.dataset = { openImg: 'https://cdn.example/view/pic.jpg', imgName: 'pic.jpg', imgPath: 'pic.jpg' };
-  mockImgBtn.closest = (s) => (s === '[data-open-img]' ? mockImgBtn : mockImgFigure.closest(s));
-  const prevViewerCount = imageViewerOpened;
-  await clickEl(mockImgBtn);
-  assert.equal(imageViewerOpened, prevViewerCount + 1, 'quick tap on picture opens full-size viewer');
-
-  createdNodes = [];
-  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'touch', clientX: 80, clientY: 240, target: mockImgBtn }));
-  await new Promise((r) => setTimeout(r, 410));
-  const picHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
-  assert.ok(picHoldMenu, 'holding a picture opens Pic 1 reaction strip');
-  assert.equal(picHoldMenu.classList.contains('is-visible'), true);
-  let ctxPrevented = false;
-  contextMenuHandlers.forEach((fn) => fn({ target: mockImgBtn, preventDefault: () => { ctxPrevented = true; } }));
-  assert.equal(ctxPrevented, true, 'OS contextmenu on held picture is prevented');
-  assert.equal(picHoldMenu.classList.contains('is-leaving'), false, 'trailing contextmenu keeps held reaction pill open');
-  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'touch', target: mockImgBtn }));
-  await clickEl(mockImgBtn);
-  assert.equal(imageViewerOpened, prevViewerCount + 1, 'trailing click after picture hold must NOT open viewer');
-
-  // Hold video with stationary primary mouse -> opens Pic 1 without playing video; drag >10px cancels hold
-  await clickEl(makeEl('outside-stage'));
-  await new Promise((r) => setTimeout(r, 230));
-  const mockVidEl = { paused: true, ended: false, play() { this.paused = false; return Promise.resolve(); }, pause() { this.paused = true; } };
-  const mockVidPlayer = makeEl('mock-video-player');
-  mockVidPlayer.getBoundingClientRect = () => ({ left: 24, right: 280, top: 240, bottom: 420, width: 256 });
-  mockVidPlayer.querySelector = (s) => (s === 'video' ? mockVidEl : null);
-  mockVidPlayer.closest = (s) => (s === '.msg-row' || s === '[data-msg-id]' || s === '[data-msg-id="m3"]' ? mockRow : (s === '#msg-messages-list .msg-bubble:not(.is-deleted)' ? mockBubble : (s === '.msg-video-player' || s === '.msg-att-image, .msg-video-player' ? mockVidPlayer : null)));
-  const mockVideoTarget = { closest: (s) => (s === 'video' ? mockVideoTarget : mockVidPlayer.closest(s)) };
-
-  createdNodes = [];
-  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, clientX: 100, clientY: 300, target: mockVideoTarget }));
-  pointerMoveHandlers.forEach((fn) => fn({ clientX: 118, clientY: 300 }));
-  await new Promise((r) => setTimeout(r, 410));
-  assert.equal(createdNodes.some((n) => String(n.className).includes('msg-react-menu')), false, 'moving pointer >10px cancels hold');
-
-  createdNodes = [];
-  pointerDownHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, clientX: 100, clientY: 300, target: mockVideoTarget }));
-  await new Promise((r) => setTimeout(r, 410));
-  const vidHoldMenu = createdNodes.find((n) => String(n.className).includes('msg-react-menu'));
-  assert.ok(vidHoldMenu, 'holding a video opens Pic 1 reaction strip');
-  assert.equal(vidHoldMenu.classList.contains('is-visible'), true);
-  pointerUpHandlers.forEach((fn) => fn({ pointerType: 'mouse', button: 0, target: mockVideoTarget }));
-  await clickEl(mockVideoTarget);
-  assert.equal(mockVidEl.paused, true, 'trailing click after video hold must NOT start video playback');
-  await clickEl(makeEl('outside-stage'));
-  await new Promise((r) => setTimeout(r, 230));
-
-  // Pinned message light-green pill banner, expandable panel without row 'X' buttons, and single active-pin highlight
-  threadMessages.forEach((m) => { if (m.id === 'm1' || m.id === 'sent-1') m.pinned_at = '2026-11-15T10:15:00Z'; });
-  pinnedMsgs = [
-    { id: 'm1', body: 'hello', pinned_at: '2026-11-15T10:15:00Z' },
-    { id: 'sent-1', body: 'Second pinned note', pinned_at: '2026-11-15T10:14:00Z' }
-  ];
-  tableHandlers.get('messages')?.({ eventType: 'UPDATE', new: { id: 'm1', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 320));
-  const pinBannerEl = getEl('msg-pinned-banner');
-  assert.equal(pinBannerEl.hidden, false);
-  assert.match(pinBannerEl.innerHTML, /class="msg-pinned-pill"[\s\S]*?PINNED MESSAGE\s*<span class="msg-pinned-count">2<\/span>[\s\S]*?<strong>hello<\/strong>[\s\S]*?data-pinned-toggle[^>]*aria-expanded="false"/);
-  assert.match(pinBannerEl.innerHTML, /id="msg-pinned-panel" hidden/);
-
-  // Only the chosen active pinned message gets the .is-pinned border in the thread, and .msg-bubble-wrap hugs .msg-bubble + .msg-row-actions
-  const pinnedMsgsHtml = getEl('msg-messages-list').innerHTML;
-  assert.equal((pinnedMsgsHtml.match(/class="msg-bubble[^"]*\bis-pinned\b/g) || []).length, 1, 'only the active selected pinned message gets the highlight border');
-  assert.match(pinnedMsgsHtml, /data-msg-id="m1"[\s\S]*?class="msg-bubble-wrap"[\s\S]*?class="msg-bubble is-pinned"/);
-  assert.match(pinnedMsgsHtml, /class="msg-bubble-wrap">[\s\S]*?class="msg-bubble[\s\S]*?class="msg-row-actions"/);
-
-  // Toggle chevron expands dropdown panel with no row 'X' unpin buttons
-  const pinToggleTarget = {
-    dataset: {},
-    closest: (sel) => (sel === '[data-pinned-toggle]' || sel === '#msg-pinned-banner' ? pinToggleTarget : null)
-  };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: pinToggleTarget })));
-  assert.match(pinBannerEl.innerHTML, /data-pinned-toggle[^>]*aria-expanded="true"/);
-  assert.doesNotMatch(pinBannerEl.innerHTML, /id="msg-pinned-panel" hidden/);
-  assert.match(pinBannerEl.innerHTML, /<h3>Pinned messages <em>2<\/em><\/h3>[\s\S]*?msg-pinned-item is-active[\s\S]*?msg-pinned-item-num">1<\/span>/);
-  assert.doesNotMatch(pinBannerEl.innerHTML, /data-unpin-msg|msg-pinned-item-unpin/);
-
-  // Selecting pinned #2 moves the .is-pinned border exclusively to that message and updates the top banner
-  const mockBubble1 = makeEl('mock-b1');
-  mockBubble1.classList.add('is-pinned');
-  const mockBubble2 = makeEl('mock-b2');
-  getEl('msg-messages-list').querySelectorAll = (sel) => (sel === '.msg-row[data-msg-id]' ? [
-    { dataset: { msgId: 'm1' }, querySelector: () => mockBubble1 },
-    { dataset: { msgId: 'sent-1' }, querySelector: () => mockBubble2 }
-  ] : []);
-  const selectPin2Target = {
-    dataset: { pinnedSelect: 'sent-1', jumpMsg: 'sent-1' },
-    closest: (sel) => (sel === '[data-jump-msg]' || sel === '#msg-pinned-banner' ? selectPin2Target : null)
-  };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: selectPin2Target })));
-  assert.equal(mockBubble1.classList.contains('is-pinned'), false);
-  assert.equal(mockBubble2.classList.contains('is-pinned'), true);
-  assert.match(pinBannerEl.innerHTML, /<strong>Second pinned note<\/strong>/);
-
-  // Clicking 3-dots includes 'Reply' and choosing it arms composer reply bar
-  const dotsTarget = {
-    dataset: { msgAct: 'menu', msgId: 'm1' },
-    getBoundingClientRect: () => ({ left: 100, right: 128, top: 180, bottom: 208, width: 28, height: 28 }),
-    closest: (sel) => (sel === '[data-msg-act]' ? dotsTarget : (sel === '.msg-row' ? makeEl('row-m1') : null))
-  };
-  createdNodes = [];
-  await clickEl(dotsTarget);
-  const dotsCtxMenu = createdNodes.find((n) => String(n.className).includes('msg-ctx-menu'));
-  assert.ok(dotsCtxMenu);
-  assert.match(dotsCtxMenu.innerHTML, /data-ctx-do="reply"[^>]*>Reply<\/button>/);
-  const replyMenuBtn = { dataset: { ctxDo: 'reply', msgId: 'm1' }, closest: (sel) => (sel === '[data-ctx-do]' ? replyMenuBtn : null) };
-  await clickEl(replyMenuBtn);
-  assert.equal(getEl('msg-context-bar').hidden, false);
-  assert.match(getEl('msg-context-bar').innerHTML, /Replying to/);
-
-  // Mobile Back button then clicking the SAME chat again re-opens the thread view immediately
-  const chatsViewEl = getEl('msg-view-chats');
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true);
-  await dispatchClick('#msg-back-to-list', { dataset: {} });
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false);
-  await dispatchClick('[data-open-conv]', { dataset: { openConv: convId } });
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true, 're-selecting same chat after Back must reopen mobile thread');
-
-  // Messenger-style Chat Info drawer: overview shows ONLY Shared media & Shared files selectors (no inline grids/lists); picking one enters its scrollable view with Back button
-  threadMessages = [
-    ...threadMessages,
-    {
-      id: 'm-media-batch',
-      conversation_id: convId,
-      sender_id: peerId,
-      body: 'Receipts and video',
-      message_type: 'MEDIA',
-      created_at: '2026-11-15T10:20:00Z',
-      attachments: [
-        ...Array.from({ length: 11 }, (_, idx) => ({ path: `${convId}/photo-${idx + 1}.jpg`, kind: 'image', name: `photo-${idx + 1}.jpg`, size: 42000 })),
-        { path: `${convId}/clip.mp4`, kind: 'video', name: 'clip.mp4', size: 256000 },
-        { path: `${convId}/ledger.pdf`, kind: 'file', name: 'ledger.pdf', size: 184320 },
-        { path: `${convId}/summary.xlsx`, kind: 'file', name: 'summary.xlsx', size: 96256 }
-      ],
-      reactions: []
-    }
-  ];
-  tableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-media-batch', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 340));
-
-  const expectedMediaCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind === 'image' || a.kind === 'video').length, 0);
-  const expectedFileCount = threadMessages.filter((m) => !m.deleted_for_everyone_at).reduce((n, m) => n + (m.attachments || []).filter((a) => a.kind !== 'image' && a.kind !== 'video' && a.kind !== 'audio').length, 0);
-  assert.ok(expectedMediaCount >= 12);
-  assert.ok(expectedFileCount >= 2);
-  const drawerEl = getEl('msg-thread-drawer');
-  await dispatchClick('#msg-thread-info-toggle', { dataset: {} });
-  assert.equal(drawerEl.hidden, false);
-  assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="media"[\\s\\S]*?Shared media[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedMediaCount}<\\/span>`));
-  assert.match(drawerEl.innerHTML, new RegExp(`data-drawer-view="files"[\\s\\S]*?Shared files[\\s\\S]*?<span class="msg-drawer-nav-count">${expectedFileCount}<\\/span>`));
-  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"|photo-1\.jpg|ledger\.pdf|voice\.webm/);
-
-  // Drill into Shared media -> ONLY scrollable media grid renders (all items, never sliced) + Back button
-  await clickEl({ dataset: { drawerView: 'media' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) });
-  assert.match(drawerEl.innerHTML, new RegExp(`class="msg-drawer-back" data-drawer-view="root"[\\s\\S]*?<h3>Shared media<\\/h3>[\\s\\S]*?<span class="msg-drawer-head-count">${expectedMediaCount}<\\/span>`));
-  assert.match(drawerEl.innerHTML, /data-drawer-screen="media"[\s\S]*?class="msg-drawer-media-grid"/);
-  assert.equal((drawerEl.innerHTML.match(/class="msg-drawer-thumb/g) || []).length, expectedMediaCount, 'Shared media subview shows all items for scrolling');
-  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-profile"|class="msg-drawer-files"|Chat actions/);
-
-  // Navigate back -> root overview again without inline grids/lists
-  await clickEl({ dataset: { drawerView: 'root' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'root' } } : null) });
-  assert.match(drawerEl.innerHTML, /data-drawer-screen="root"[\s\S]*?data-drawer-view="media"/);
-  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-media-grid"|class="msg-drawer-files"/);
-
-  // Drill into Shared files -> ONLY scrollable files list renders + Back button
-  await clickEl({ dataset: { drawerView: 'files' }, closest: (sel) => (sel === '[data-drawer-view]' ? { dataset: { drawerView: 'files' } } : null) });
-  assert.match(drawerEl.innerHTML, new RegExp(`class="msg-drawer-back" data-drawer-view="root"[\\s\\S]*?<h3>Shared files<\\/h3>[\\s\\S]*?<span class="msg-drawer-head-count">${expectedFileCount}<\\/span>`));
-  assert.match(drawerEl.innerHTML, /data-drawer-screen="files"[\s\S]*?class="msg-drawer-files"[\s\S]*?summary\.xlsx[\s\S]*?ledger\.pdf/);
-  assert.doesNotMatch(drawerEl.innerHTML, /class="msg-drawer-profile"|class="msg-drawer-media-grid"|Chat actions/);
-
-  // Close drawer cleanly
-  await dispatchClick('#msg-drawer-close', { dataset: {} });
-  assert.equal(drawerEl.hidden, true);
-
-  // Switching to Friends view renders dark-emerald hero card with 3 underline tabs and zero Suggestions UI
-  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'friends' } });
-  const friendsHtml = getEl('msg-view-friends').innerHTML;
-  assert.match(friendsHtml, /class="msg-friends-hero"[\s\S]*?Friends <span class="msg-hero-amp">&amp;<\/span> Connections/);
-  assert.match(friendsHtml, /class="msg-friends-tabs"[\s\S]*?data-friends-sub="all"[\s\S]*?My Friends[\s\S]*?data-friends-sub="incoming"[\s\S]*?Friend Requests[\s\S]*?data-friends-sub="sent"[\s\S]*?Sent/);
-  assert.doesNotMatch(friendsHtml, /Suggestions|privacy-respecting suggestions|data-friends-sub="suggestions"/);
-
-  // User profile popover matches warm-cream card mockup for 1 group and scales cleanly for many shared groups
-  const popEl = getEl('msg-profile-popover');
-  const dpAnchor = makeEl('mock-dp-anchor');
-  dpAnchor.dataset = { socialUserDp: peerId };
-  dpAnchor.getBoundingClientRect = () => ({ left: 40, right: 80, top: 120, bottom: 160, width: 40, height: 40 });
-  await dispatchClick('[data-social-user-dp]', dpAnchor);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(popEl.hidden, false);
-  assert.match(popEl.innerHTML, /id="msg-pop-close"/);
-  assert.match(popEl.innerHTML, /avatar-circle(?:\s+avatar-fallback)?\s+avatar-lg/);
-  assert.match(popEl.innerHTML, /<strong id="msg-pop-name">Nhicole Joy Gadia Antalan<\/strong>/);
-  assert.match(popEl.innerHTML, /@nhicole · Sent you a friend request/);
-  assert.doesNotMatch(popEl.innerHTML, /msg-handle-chip|msg-pop-groups-card|data-pop-groups-toggle|Ipon namin ni prettyynhic|mutual friend/);
-  assert.match(popEl.innerHTML, /class="msg-pop-btn msg-pop-primary-btn" data-req-decision="ACCEPT" data-req-id="req-1"[\s\S]*?<span>Accept Friend<\/span>/);
-  assert.match(popEl.innerHTML, /class="msg-pop-secondary-row"[\s\S]*?>Message<[\s\S]*?class="msg-pop-btn msg-pop-outline-btn is-danger" data-social-action="block"/);
-
-  // Shared savings group names stay hidden on profile popover even when profile has shared groups
-  mockSocialProfile = {
-    id: peerId,
-    full_name: 'Nhicole Joy Gadia Antalan',
-    username: 'nhicole',
-    bio: '',
-    avatar_url: '',
-    friendship_status: 'FRIENDS',
-    friend_request_id: null,
-    can_message: true,
-    can_send_friend_request: false,
-    shared_groups: ['Alpha Savers', 'Barkada Fund', 'Emergency Stash', 'Family Ipon', 'Travel Jar'],
-    mutual_friends_count: 3
-  };
-  await dispatchClick('[data-social-user-dp]', dpAnchor);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.match(popEl.innerHTML, /3 mutual friends/);
-  assert.doesNotMatch(popEl.innerHTML, /msg-pop-groups-card|data-pop-groups-toggle|Alpha Savers|Barkada Fund/);
-
-  // Close popover via close X button
-  await dispatchClick('#msg-pop-close', { dataset: {} });
-  assert.equal(popEl.hidden, true);
-
-  // Switching to Requests tab while inside a chat conversation exits mobile thread & clears mismatched chat pane
-  await dispatchClick('[data-open-conv]', { dataset: { openConv: convId } });
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), true);
-  assert.equal(getEl('msg-thread-active').hidden, false);
-  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'requests' } });
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false, 'switching to Requests tab must exit mobile conversation view');
-  assert.equal(getEl('msg-thread-active').hidden, true, 'switching to Requests from a regular chat must clear active thread pane');
-  assert.equal(getEl('msg-thread-empty').hidden, false);
-
-  // Re-opening workspace from Dashboard without explicit tab/conversationId always defaults to Chats list
-  await dispatchClick('[data-msg-tab]', { dataset: { msgTab: 'friends' } });
-  assert.equal(getEl('msg-view-friends').hidden, false);
-  await win2.IponMessages.openWorkspace();
-  assert.equal(getEl('msg-view-chats').hidden, false, 'default openWorkspace must always land on Chats view');
-  assert.equal(getEl('msg-view-friends').hidden, true);
-  assert.equal(chatsViewEl.classList.contains('is-mobile-thread'), false, 'default openWorkspace must show Chats list instead of sticky thread');
-});
-
 test('migration 078 filters audit logs to meaningful governance/financial events and offline page omits broken logo', () => {
   const migration078 = read('database/migrations/20261115_078_filter_audit_log_signal_only.sql');
   const schema = read('database/schema.sql');
@@ -7074,17 +5898,11 @@ test('migration 078 filters audit logs to meaningful governance/financial events
   assert.match(bundledOffline, /<h1>You appear to be offline<\/h1>/);
 });
 
-test('chat captionless media overlay and audit log calendar date-range chips meet UI reliability contracts', () => {
+test('audit log calendar date-range chips and image viewer meet UI reliability contracts', () => {
   const auditHtml = read('audit.html');
   const auditJs = read('js/audit.js');
   const css = read('css/app.css');
-
-  // Chat captionless media & timestamp grouping CSS
-  assert.match(css, /\.msg-bubble\.has-top-media\.is-media-only\s*\{/);
-  assert.match(css, /\.msg-bubble-meta\.is-media-overlay\s*\{/);
-  assert.match(css, /\.msg-bubble\.is-video-controls-active\s+\.msg-bubble-meta\.is-media-overlay\s*\{/);
-  assert.match(css, /\.msg-bubble-meta\.is-tick-only\s*\{/);
-  assert.match(css, /\.msg-send-progress\.is-media-overlay\s*\{/);
+  const coreJs = read('js/core.js');
 
   // Audit Log calendar range chips & filter bar DOM + JS + CSS
   assert.match(auditHtml, /class="panel-header audit-panel-header"/);
@@ -7109,90 +5927,38 @@ test('chat captionless media overlay and audit log calendar date-range chips mee
   assert.match(css, /\.date-filter-chip\s+input\[type="date"\]::-webkit-calendar-picker-indicator\s*\{/);
   assert.match(css, /html\[data-theme="dark"\]\s+\.date-filter-chip\b/);
 
-  // Uniform chat photo thumbnail frame, aligned mobile bubble gutters, full-size image viewer toggle, centered voice speaker button, mobile 3-dots preservation, and Pic 2 Friends hero card
-  const coreJs = read('js/core.js');
-  const msgJs = read('js/messages.js');
-  assert.match(css, /\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*max-width:\s*100%;\s*height:\s*220px;/s);
-  assert.match(css, /\.msg-attachments\.is-carousel\s*>\s*\.msg-att-image\s*\{[^}]*width:\s*clamp\(176px,\s*56vw,\s*232px\);\s*height:\s*220px;/s);
-  assert.match(css, /\.msg-bubble-col,\s*\.msg-row\.is-mine\s+\.msg-bubble-col\s*\{\s*max-width:\s*min\(520px,\s*calc\(100%\s*-\s*72px\)\);\s*\}/s);
-  assert.doesNotMatch(css, /@media\s*\(max-width:\s*720px\)\s*\{[^}]*\.msg-bubble-col\s*\{\s*max-width:\s*86%;/s);
-  assert.match(css, /\.msg-voice-wave\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
-  assert.match(css, /\.msg-voice-mute-btn\s*\{[^}]*align-self:\s*center;[^}]*border-radius:\s*50%;/s);
-  assert.match(css, /\.msg-att-image img\s*\{[^}]*width:\s*100%;\s*height:\s*100%;[^}]*object-fit:\s*cover;/s);
-  assert.match(css, /\.msg-row-actions \.msg-action-mini\[data-msg-act="react"\],\s*\.msg-row-actions \.msg-action-mini\[data-msg-act="reply"\]\s*\{\s*display:\s*none;\s*\}/s);
   assert.match(coreJs, /dialog\.id = 'ipon-image-viewer'[\s\S]*?id="ipon-iv-close"[\s\S]*?id="ipon-iv-title"[\s\S]*?class="image-viewer-dl-pill" id="ipon-iv-download"[\s\S]*?is-actual-size[\s\S]*?naturalWidth[\s\S]*?naturalHeight/);
   assert.doesNotMatch(coreJs, /id="ipon-iv-zoom"/);
   assert.match(css, /\.image-viewer-sheet\s*\{[^}]*background:\s*#05110d;/s);
   assert.match(css, /\.image-viewer-dl-pill\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*#e6c678;/s);
   assert.match(css, /\.image-viewer-header \.dialog-close\s*\{[^}]*width:\s*38px;\s*height:\s*38px;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%/s);
   assert.match(css, /\.image-viewer-stage\.is-actual-size img\s*\{[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
-  assert.match(css, /\.msg-pinned-pill\s*\{[^}]*background:\s*var\(--thread-pin-pill-bg,\s*linear-gradient\(135deg,\s*#ecf5ef\s+0%,\s*#e1efe6\s+100%\)\);[\s\S]*?\.msg-pinned-panel\s*\{/s);
-  assert.doesNotMatch(css, /\.msg-pinned-item-unpin/);
-  assert.match(css, /\.msg-bubble-wrap\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*6px;/s);
-  assert.match(msgJs, /function syncActivePinnedHighlight\(/);
-  assert.match(msgJs, /isActivePinned\s*=\s*Boolean\(isPinned\s*&&\s*!isDeleted\s*&&\s*state\.activePinnedId\s*&&\s*m\.id\s*===\s*state\.activePinnedId\)/);
-  assert.match(css, /\.msg-friends-hero\s*\{[\s\S]*?\.msg-friends-tabs\s*\{[\s\S]*?\.msg-friends-tab\.is-active::after\s*\{/s);
-  assert.match(css, /\.msg-unread-sep span\s*\{[^}]*background:\s*#15533e;/s);
-  assert.doesNotMatch(css, /\.msg-unread-sep[^{]*\{[^}]*#b83a2d/);
-  assert.match(css, /\.msg-reply-quote\s*\{[^}]*border:\s*0;[^}]*border-radius:/s);
-  assert.doesNotMatch(css, /\.msg-reply-quote\s*\{[^}]*border-left:/s);
-  assert.doesNotMatch(css, /\.msg-react-quick-actions|\.msg-quick-act-btn|@keyframes\s+msgReactPop/);
-  assert.doesNotMatch(msgJs, /msg-react-quick-actions|showActions/);
-  assert.match(msgJs, /data-ctx-do="reply"[^>]*>Reply<\/button>/);
-  assert.match(css, /\.msg-img-open-btn,\s*\.msg-img-open-btn img,\s*\.msg-video-player,\s*\.msg-att-video\s*\{[^}]*-webkit-touch-callout:\s*none;/s);
-  assert.match(css, /\.msg-floating-menu\s*\{[^}]*opacity:\s*0;[^}]*transition:/s);
-  assert.match(css, /\.msg-floating-menu\.is-visible\s*\{[^}]*opacity:\s*1;/s);
-  assert.match(css, /\.msg-floating-menu\.is-leaving\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
-  assert.match(css, /\.msg-floating-menu\[data-placed="below"\]\s*\{/);
-  assert.match(msgJs, /HOLD_EXCLUDE_SEL\s*=/);
-  assert.match(msgJs, /function revealFloatingMenu\(menu\)/);
-  assert.match(msgJs, /showReactionFloatingMenu\([^)]*\{\s*toggle:\s*false\s*\}/);
-  assert.match(msgJs, /threadInfoView:\s*'root'/);
-  assert.doesNotMatch(msgJs, /media\.slice\(-9\)|docs\.slice\(-8\)/);
-  assert.match(css, /\.msg-drawer-body\s*\{[^}]*overflow-y:\s*auto;/s);
-  assert.match(css, /\.msg-drawer-back\s*\{[^}]*aspect-ratio:\s*1 \/ 1;[^}]*border-radius:\s*50%;/s);
-  assert.match(css, /\.msg-drawer-nav-btn\s*\{[\s\S]*?\.msg-drawer-file-badge\s*\{/s);
-
-  // User profile popover card omits shared savings groups section
-  assert.doesNotMatch(msgJs, /function renderSharedGroupsCard\(|msg-pop-groups-card|data-pop-groups-toggle/);
-  assert.doesNotMatch(msgJs, /shared_groups\.slice\(0,\s*2\)/);
-  assert.match(css, /\.msg-profile-popover\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*#faf7ef;/s);
-  assert.match(css, /\.msg-profile-popover\s+\.msg-pop-close\s*\{[^}]*width:\s*34px\s*!important;[^}]*height:\s*34px\s*!important;/s);
-  assert.match(css, /\.msg-pop-primary-btn\s*\{[^}]*background:\s*#142620;/s);
-  assert.match(css, /\.msg-pop-secondary-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
 });
 
-test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, native downloads, and microphone permission runtime contracts', async () => {
+test('friendlyError offline mapping, edge-to-edge pinch-zoom image viewer, and native downloads runtime contracts', async () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
   const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
   const infoPlist = read('ios/App/App/Info.plist');
 
-  // CSS edge-to-edge full-screen image viewer with Messenger overlay chrome & pinch touch-action
+  // CSS edge-to-edge full-screen image viewer with overlay chrome & pinch touch-action
   assert.match(css, /\.image-viewer-stage\s*\{[^}]*padding:\s*0;[^}]*touch-action:\s*none;/s);
   assert.match(css, /\.image-viewer-stage img\s*\{[^}]*width:\s*100%;\s*height:\s*100%;[^}]*border-radius:\s*0;\s*border:\s*0;[^}]*object-fit:\s*contain;/s);
   assert.match(css, /\.image-viewer-dialog\.is-chrome-hidden \.image-viewer-header\s*\{[^}]*opacity:\s*0;/s);
 
-  // Android & iOS native mic + download contracts
+  // Android & iOS native notification + download contracts (microphone permission removed with chat)
   assert.match(mainActivity, /maybeRequestStartupPermissions\(/);
   assert.match(mainActivity, /Manifest\.permission\.POST_NOTIFICATIONS/);
-  assert.doesNotMatch(mainActivity, /maybeRequestStartupPermissions\([\s\S]*?Manifest\.permission\.RECORD_AUDIO/);
+  assert.doesNotMatch(mainActivity, /RECORD_AUDIO/);
   assert.match(mainActivity, /webView\.setDownloadListener\(/);
-  assert.match(bgPlugin, /Manifest\.permission\.RECORD_AUDIO,\s*Manifest\.permission\.MODIFY_AUDIO_SETTINGS[\s\S]*?alias\s*=\s*"microphone"/);
-  assert.match(bgPlugin, /hasManifestPermission\(/);
-  assert.match(bgPlugin, /shouldShowRequestPermissionRationale\(/);
-  assert.match(bgPlugin, /public void ensureMicrophonePermission\(PluginCall call\)/);
+  assert.doesNotMatch(bgPlugin, /RECORD_AUDIO|ensureMicrophonePermission/);
   assert.match(bgPlugin, /public void openAppSettings\(PluginCall call\)/);
   assert.match(bgPlugin, /public void downloadFile\(PluginCall call\)/);
   assert.match(bgPlugin, /DownloadManager\.Request/);
   assert.match(bgPlugin, /MediaStore\.Downloads\.EXTERNAL_CONTENT_URI/);
-  assert.match(infoPlist, /NSMicrophoneUsageDescription/);
-  assert.match(messagesJs, /ensureMicrophoneAccess\(\)[\s\S]*?showMicApkUpdateNotice\(\)[\s\S]*?offerOpenAppSettingsForMic\(\)/);
-  assert.match(messagesJs, /downloadOriginalAttachment[\s\S]*?ipon\(\)\.downloadFile\(/);
+  assert.doesNotMatch(infoPlist, /NSMicrophoneUsageDescription/);
   assert.match(coreJs, /touchstart[\s\S]*?touchmove[\s\S]*?touchDist[\s\S]*?applyZoom/);
-
   // Execute js/core.js in VM to verify friendlyError & Ipon.downloadFile runtime behavior
   const makeNode = (tag) => ({
     tagName: String(tag || 'DIV').toUpperCase(),
@@ -7518,29 +6284,18 @@ test('mobile APK background usage controls render in My account and auto-prompt 
   assert.equal(bgRow._btn.disabled, false);
 });
 
-test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video previews, custom Pic 3 video viewer, and flicker-free reactions work end-to-end', async () => {
+test('mobile back stack and custom video viewer lightbox work end-to-end', async () => {
   const vm = await import('node:vm');
   const mainJava = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   const css = read('css/app.css');
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
 
-  // 1. Static source & styling contracts
   assert.match(mainJava, /import androidx\.activity\.OnBackPressedCallback;/);
   assert.match(mainJava, /window\.Ipon\.handleNativeBack/);
   assert.match(mainJava, /performDefaultBack\(/);
   assert.match(mainJava, /public void onWindowFocusChanged\(boolean hasFocus\)/);
-  assert.match(css, /\.msg-scroll-wrap[\s\S]*?overflow-anchor:\s*auto;/);
-  assert.doesNotMatch(css, /\.msg-tick\.is-delivered,\s*\n\s*\.msg-tick\.is-read/);
-  assert.match(css, /\.msg-tick\.is-delivered\s*\{\s*color:\s*#4f695e;/);
-  assert.match(css, /\.msg-tick\.is-read\s*\{\s*color:\s*#c9921a;/);
-  assert.match(css, /\.msg-row\.is-mine \.msg-tick\.is-read\s*\{\s*color:\s*#f2c14e;/);
-  assert.match(css, /\.msg-video-player\s*\{[\s\S]*?aspect-ratio:\s*var\(--vid-ar/);
-  assert.match(css, /\.msg-att-video::-webkit-media-controls[\s\S]*?display:\s*none\s*!important;/);
-  assert.match(css, /\.video-viewer-dialog \.msg-video-controls\.is-viewer-dock/);
-  assert.match(css, /\.msg-video-center-play\b/);
+  assert.match(css, /\.video-viewer-dialog \.ipon-video-controls\.is-viewer-dock/);
 
-  // 2. core.js runtime: openVideoViewer (Pic 3 dock, no native controls) & step-by-step handleNativeBack
   const idMap = new Map();
   const makeCoreEl = (tag) => {
     const cls = new Set();
@@ -7550,67 +6305,33 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     let html = '';
     const el = {
       tagName: String(tag || 'div').toUpperCase(),
-      open: false,
-      hidden: false,
-      disabled: false,
-      muted: false,
-      paused: true,
-      duration: 5.2,
-      currentTime: 0,
-      textContent: '',
-      dataset: {},
-      style: { setProperty() { }, removeProperty() { } },
+      open: false, hidden: false, disabled: false, muted: false, paused: true, duration: 5.2, currentTime: 0,
+      textContent: '', dataset: {}, style: { setProperty() { }, removeProperty() { } },
       classList: {
-        add: (c) => cls.add(c),
-        remove: (c) => cls.delete(c),
-        toggle: (c, f) => {
-          if (f === undefined ? !cls.has(c) : f) cls.add(c);
-          else cls.delete(c);
-        },
+        add: (c) => cls.add(c), remove: (c) => cls.delete(c),
+        toggle: (c, f) => { if (f === undefined ? !cls.has(c) : f) cls.add(c); else cls.delete(c); },
         contains: (c) => cls.has(c)
       },
-      attributes: attrs,
-      children,
+      attributes: attrs, children,
       appendChild(c) { children.push(c); return c; },
       append(...nodes) { children.push(...nodes); },
-      prepend() { },
-      insertBefore(n) { return n; },
-      insertAdjacentHTML() { },
-      remove() { },
+      prepend() { }, insertBefore(n) { return n; }, insertAdjacentHTML() { }, remove() { },
       setAttribute(k, v) { attrs.set(k, String(v)); },
       getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
       removeAttribute(k) { attrs.delete(k); },
       hasAttribute(k) { return attrs.has(k); },
-      addEventListener(ev, fn) {
-        if (!listeners.has(ev)) listeners.set(ev, []);
-        listeners.get(ev).push(fn);
-      },
+      addEventListener(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, []); listeners.get(ev).push(fn); },
       dispatchEvent(ev) { (listeners.get(ev?.type) || []).forEach((fn) => fn(ev)); },
       showModal() { this.open = true; },
       close() { this.open = false; this.dispatchEvent({ type: 'close' }); },
       play() { this.paused = false; this.dispatchEvent({ type: 'play' }); return Promise.resolve(); },
       pause() { this.paused = true; this.dispatchEvent({ type: 'pause' }); },
-      load() { },
-      removeEventListener() { },
-      focus() { },
-      querySelector(sel) {
-        const idMatch = /^#([A-Za-z0-9_-]+)$/.exec(sel);
-        if (idMatch) return idMap.get(idMatch[1]) || null;
-        return null;
-      },
+      load() { }, removeEventListener() { }, focus() { },
+      querySelector(sel) { const m = /^#([A-Za-z0-9_-]+)$/.exec(sel); return m ? (idMap.get(m[1]) || null) : null; },
       querySelectorAll: () => []
     };
-    Object.defineProperty(el, 'id', {
-      get: () => attrs.get('id') || '',
-      set: (v) => { attrs.set('id', String(v)); if (v) idMap.set(String(v), el); }
-    });
-    Object.defineProperty(el, 'className', {
-      get: () => [...cls].join(' '),
-      set: (v) => {
-        cls.clear();
-        String(v || '').split(/\s+/).filter(Boolean).forEach((c) => cls.add(c));
-      }
-    });
+    Object.defineProperty(el, 'id', { get: () => attrs.get('id') || '', set: (v) => { attrs.set('id', String(v)); if (v) idMap.set(String(v), el); } });
+    Object.defineProperty(el, 'className', { get: () => [...cls].join(' '), set: (v) => { cls.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach((c) => cls.add(c)); } });
     Object.defineProperty(el, 'innerHTML', {
       get: () => html,
       set: (v) => {
@@ -7629,8 +6350,6 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     return el;
   };
 
-  let backNavPending = false;
-  let locAssigned = '';
   const coreLoaderEl = makeCoreEl('div');
   const coreDoc = {
     documentElement: makeCoreEl('html'),
@@ -7638,495 +6357,44 @@ test('mobile back stack, receipt checkmarks (sent/delivered/seen), chat video pr
     body: Object.assign(makeCoreEl('body'), { dataset: { page: 'contributions' } }),
     createElement: (tag) => makeCoreEl(tag),
     getElementById: (id) => (id === 'app-loader' ? coreLoaderEl : (idMap.get(id) || null)),
-    querySelector: (sel) => {
-      if (sel === 'dialog[open]') {
-        for (const el of idMap.values()) {
-          if (el.tagName === 'DIALOG' && el.open) return el;
-        }
-        return null;
-      }
-      return null;
-    },
-    querySelectorAll: (sel) => {
-      if (sel === 'dialog[open]') {
-        return [...idMap.values()].filter((el) => el.tagName === 'DIALOG' && el.open);
-      }
-      return [];
-    },
+    querySelector: (sel) => (sel === 'dialog[open]' ? ([...idMap.values()].find((el) => el.tagName === 'DIALOG' && el.open) || null) : null),
+    querySelectorAll: (sel) => (sel === 'dialog[open]' ? [...idMap.values()].filter((el) => el.tagName === 'DIALOG' && el.open) : []),
     addEventListener() { }
   };
   const coreCtx = {
-    window: null,
-    document: coreDoc,
+    window: null, document: coreDoc,
     navigator: { userAgent: 'myIPONApp/21', onLine: true },
-    location: {
-      origin: 'https://myipon.example',
-      href: 'https://myipon.example/contributions.html',
-      pathname: '/contributions.html',
-      search: '',
-      replace(url) { locAssigned = url; },
-      assign(url) { locAssigned = url; }
-    },
+    location: { origin: 'https://myipon.example', href: 'https://myipon.example/contributions.html', pathname: '/contributions.html', search: '', replace() { }, assign() { } },
     localStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     sessionStorage: { getItem: () => null, setItem() { }, removeItem() { } },
     IPON_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' },
-    IponMessages: {
-      dismissTransientMenus: () => false,
-      handleBackNavigation: () => {
-        if (!backNavPending) return false;
-        backNavPending = false;
-        return true;
-      }
-    },
-    CustomEvent: class { },
-    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
-    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; },
-    clearTimeout() { },
-    addEventListener() { },
-    removeEventListener() { },
-    dispatchEvent() { },
-    console
+    CustomEvent: class { }, URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
+    setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0; }, clearTimeout() { }, addEventListener() { }, removeEventListener() { }, dispatchEvent() { }, console
   };
   coreCtx.window = coreCtx;
   vm.runInNewContext(coreJs, coreCtx, { filename: 'js/core.js' });
   assert.equal(typeof coreCtx.window.Ipon.openVideoViewer, 'function');
   assert.equal(typeof coreCtx.window.Ipon.handleNativeBack, 'function');
 
-  coreCtx.window.Ipon.openVideoViewer('https://cdn.example/clip.mp4', 'Video', 'Shared in chat', 'clip.mp4', { aspectRatio: '16 / 9' });
+  coreCtx.window.Ipon.openVideoViewer('https://cdn.example/clip.mp4', 'Video', 'Announcement media', 'clip.mp4', { aspectRatio: '16 / 9' });
   const vvDialog = idMap.get('ipon-video-viewer');
   const vvVideo = idMap.get('ipon-vv-video');
   const vvControls = idMap.get('ipon-vv-controls');
   assert.equal(vvDialog?.open, true);
   assert.equal(vvVideo?.hasAttribute('controls'), false, 'custom lightbox video must omit native browser controls bar');
-  assert.ok(vvControls?.classList.contains('msg-video-controls') && vvControls?.classList.contains('is-viewer-dock'));
+  assert.ok(vvControls?.classList.contains('ipon-video-controls') && vvControls?.classList.contains('is-viewer-dock'));
 
-  // Back step 1: video viewer closes first
   assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
   assert.equal(vvDialog.open, false);
-
-  // Back step 2: message thread navigation unwinds, then workspace dialog closes, then sub-page returns to dashboard, then root exits
-  const msgDialog = makeCoreEl('dialog');
-  msgDialog.id = 'msg-workspace-dialog';
-  msgDialog.open = true;
-  backNavPending = true;
-  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
-  assert.equal(backNavPending, false);
-  assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
-  assert.equal(msgDialog.open, false);
   assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'handled');
   assert.equal(coreCtx.location.href, 'dashboard.html');
   coreDoc.body.dataset.page = 'dashboard';
   coreCtx.location.pathname = '/dashboard.html';
   assert.equal(coreCtx.window.Ipon.handleNativeBack(), 'exit');
-
-  // 3. messages.js runtime: ticks (1 gray / 2 gray / 2 green), mobile visibility read guard, video preview poster & lightbox, flicker-free reactions
-  const meId = '00000000-0000-0000-0000-000000000010';
-  const peerId = '00000000-0000-0000-0000-000000000020';
-  const convId = '00000000-0000-0000-0000-0000000000c1';
-  const msgEls = new Map();
-  const msgTableHandlers = new Map();
-  const msgDocListeners = new Map();
-  const msgRpcCalls = [];
-  const videoViewerCalls = [];
-  let threadHtmlWrites = 0;
-  let reqFullscreenCalls = 0;
-
-  let mockChatTheme = 'paper';
-  let currentMsgs = [
-    { id: 'm-sent', conversation_id: convId, sender_id: meId, body: 'Only sent', message_type: 'TEXT', created_at: '2026-11-15T10:00:00Z', delivered_at: null, read_at: null, attachments: [], reactions: [] },
-    { id: 'm-deliv', conversation_id: convId, sender_id: meId, body: 'Delivered only', message_type: 'TEXT', created_at: '2026-11-15T10:01:00Z', delivered_at: '2026-11-15T10:01:02Z', read_at: null, attachments: [], reactions: [] },
-    { id: 'm-seen', conversation_id: convId, sender_id: meId, body: 'Seen by peer', message_type: 'TEXT', created_at: '2026-11-15T10:02:00Z', delivered_at: '2026-11-15T10:02:02Z', read_at: '2026-11-15T10:02:05Z', attachments: [], reactions: [] },
-    {
-      id: 'm-vid',
-      conversation_id: convId,
-      sender_id: peerId,
-      body: '',
-      message_type: 'MEDIA',
-      created_at: '2026-11-15T10:03:00Z',
-      delivered_at: '2026-11-15T10:03:01Z',
-      read_at: '2026-11-15T10:03:02Z',
-      attachments: [{ path: `${convId}/preview-clip.mp4`, kind: 'video', name: 'preview-clip.mp4', size: 120000 }],
-      reactions: []
-    }
-  ];
-
-  const makeMsgEl = (id) => {
-    const cls = new Set();
-    const attrs = new Map();
-    const elListeners = new Map();
-    let html = '';
-    const el = {
-      id,
-      hidden: false,
-      open: false,
-      value: '',
-      scrollTop: 500,
-      scrollHeight: 500,
-      clientHeight: 500,
-      dataset: {},
-      style: { setProperty() { } },
-      classList: {
-        add: (c) => cls.add(c),
-        remove: (c) => cls.delete(c),
-        toggle: (c, f) => {
-          if (f === undefined ? !cls.has(c) : f) cls.add(c);
-          else cls.delete(c);
-        },
-        contains: (c) => cls.has(c)
-      },
-      setAttribute: (k, v) => attrs.set(k, String(v)),
-      getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
-      hasAttribute: (k) => attrs.has(k),
-      addEventListener: (ev, fn) => {
-        if (!elListeners.has(ev)) elListeners.set(ev, []);
-        elListeners.get(ev).push(fn);
-      },
-      dispatchEvent: (ev) => { (elListeners.get(ev?.type) || []).forEach((fn) => fn(ev)); },
-      focus: () => { },
-      select: () => { },
-      querySelectorAll: () => [],
-      querySelector: () => null,
-      showModal() { this.open = true; },
-      close() { this.open = false; this.dispatchEvent({ type: 'close' }); }
-    };
-    Object.defineProperty(el, 'innerHTML', {
-      get: () => html,
-      set: (v) => {
-        html = String(v ?? '');
-        if (id === 'msg-messages-list') threadHtmlWrites += 1;
-      }
-    });
-    return el;
-  };
-  const getMsgEl = (id) => {
-    if (!msgEls.has(id)) msgEls.set(id, makeMsgEl(id));
-    return msgEls.get(id);
-  };
-
-  let focusedState = true;
-  let mockUnreadFirstId = null;
-  const msgWinListeners = new Map();
-  const msgDoc = {
-    documentElement: { dataset: {} },
-    visibilityState: 'visible',
-    hasFocus: () => focusedState,
-    body: { insertAdjacentHTML() { }, appendChild() { } },
-    createElement: (tag) => makeMsgEl(tag),
-    getElementById: (id) => getMsgEl(id),
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    addEventListener: (ev, fn) => {
-      if (!msgDocListeners.has(ev)) msgDocListeners.set(ev, []);
-      msgDocListeners.get(ev).push(fn);
-    }
-  };
-  const msgWin = {
-    innerWidth: 390,
-    innerHeight: 844,
-    matchMedia: (q) => {
-      const m = /max-width:\s*(\d+)px/.exec(String(q || ''));
-      return { matches: m ? msgWin.innerWidth <= Number(m[1]) : false };
-    },
-    Ipon: {
-      escapeHtml: (s) => String(s ?? ''),
-      initials: () => 'PU',
-      isUserOnline: () => true,
-      bindAvatarFallbacks: () => { },
-      syncPresenceDots: () => { },
-      syncMessagesBadges: () => { },
-      setFieldError: () => { },
-      setBusy: () => { },
-      friendlyError: (e) => String(e?.message || e),
-      toast: () => { },
-      confirmAction: async () => true,
-      openVideoViewer: (...args) => videoViewerCalls.push(args),
-      invokeAccountFunction: async (payload) => (payload?.action === 'chat-view-urls'
-        ? { urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`])) }
-        : {}),
-      rpc: async (name, params) => {
-        msgRpcCalls.push(name);
-        if (name === 'get_conversations') {
-          return [{
-            id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false,
-            chat_theme: mockChatTheme,
-            peer: { id: peerId, full_name: 'Peer User', allow_online_status: true },
-            unread_count: mockUnreadFirstId ? 1 : 0, marked_unread: false, last_message_at: '2026-11-15T10:03:00Z',
-            last_message_preview: 'Video', last_message_sender_id: peerId
-          }];
-        }
-        if (name === 'get_conversation_messages') {
-          return {
-            conversation: { id: convId, full_name: 'Peer User', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true, chat_theme: mockChatTheme },
-            has_older: false,
-            unread_first_id: mockUnreadFirstId,
-            pinned_messages: [],
-            messages: currentMsgs
-          };
-        }
-        if (name === 'update_conversation_member_state') {
-          if (params?.p_action === 'theme' && params?.p_theme) mockChatTheme = String(params.p_theme);
-          return { chat_theme: mockChatTheme };
-        }
-        if (name === 'mark_conversation_read') {
-          mockUnreadFirstId = null;
-          return { read_at: '2026-11-15T10:03:50Z', receipts_shared: true };
-        }
-        if (name === 'get_social_overview') {
-          return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
-        }
-        if (name === 'toggle_message_reaction') {
-          const mid = params?.p_message_id;
-          const emoji = params?.p_emoji;
-          currentMsgs = currentMsgs.map((m) => (m.id === mid
-            ? { ...m, reactions: [{ emoji, user_id: meId, user_name: 'Me' }] }
-            : m));
-          return { added: true };
-        }
-        return {};
-      },
-      client: {
-        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
-        channel: () => ({
-          on(kind, filter, cb) {
-            if (kind === 'postgres_changes' && filter?.table) msgTableHandlers.set(filter.table, cb);
-            return this;
-          },
-          subscribe() { return this; }
-        })
-      }
-    },
-    addEventListener: (ev, fn) => {
-      if (!msgWinListeners.has(ev)) msgWinListeners.set(ev, []);
-      msgWinListeners.get(ev).push(fn);
-    },
-    location: { search: '', href: 'https://myipon.example/dashboard.html' }
-  };
-  msgWin.window = msgWin;
-  vm.runInNewContext(messagesJs, {
-    window: msgWin,
-    document: msgDoc,
-    location: msgWin.location,
-    Map, Set, URLSearchParams, navigator: {}, Math, JSON, Date, Intl,
-    URL: { createObjectURL: () => 'blob:mock', revokeObjectURL: () => { } },
-    CSS: { escape: (s) => String(s) },
-    requestAnimationFrame: (fn) => fn(),
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => { }
-  });
-
-  await msgWin.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', chat_privacy: { show_online: true } });
-  await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
-  const initialThreadHtml = getMsgEl('msg-messages-list').innerHTML;
-
-  // Sent = outlined coin ring + check; Delivered = solid coin + cutout check; Seen = gold-rimmed peer DP coin medallion
-  assert.match(initialThreadHtml, /Only sent[\s\S]*?<span class="msg-tick is-sent"[^>]*aria-label="Sent"><svg class="msg-tick-svg is-coin-sent"[^>]*><circle class="coin-rim"[^>]*\/><path class="coin-sent-check"[^>]*\/><\/svg><\/span>/);
-  assert.match(initialThreadHtml, /Delivered only[\s\S]*?<span class="msg-tick is-delivered"[^>]*aria-label="Delivered"><svg class="msg-tick-svg is-coin-delivered"[\s\S]*?<circle class="coin-core"[^>]*\/><path class="coin-mark"[^>]*\/><\/svg><\/span>/);
-  assert.match(initialThreadHtml, /Seen by peer[\s\S]*?<span class="msg-tick is-read"[^>]*aria-label="Seen"><span class="msg-seen-dp-stack"><span class="msg-seen-dp-coin"[^>]*><span class="msg-seen-dp-face">/);
-
-  // Inline video has SVG poster preview and custom center play button
-  assert.match(initialThreadHtml, /class="msg-video-player"[\s\S]*?<video class="msg-att-video" preload="metadata" playsinline\s+poster="data:image\/svg\+xml/);
-  assert.match(initialThreadHtml, /class="msg-video-center-play" data-vact="play"/);
-
-  // Clicking fullscreen calls Ipon.openVideoViewer (never native requestFullscreen)
-  const fsVideoEl = {
-    currentSrc: 'https://cdn.example/view/clip.mp4',
-    src: 'https://cdn.example/view/clip.mp4',
-    videoWidth: 720,
-    videoHeight: 1280,
-    currentTime: 1.5,
-    paused: true,
-    poster: '',
-    pause() { },
-    requestFullscreen() { reqFullscreenCalls += 1; }
-  };
-  const fsPlayer = Object.assign(makeMsgEl('fs-player'), {
-    dataset: { vidConv: convId, vidPath: `${convId}/preview-clip.mp4`, vidName: 'preview-clip.mp4', vidKey: `${convId}/preview-clip.mp4` },
-    querySelector: (s) => (s === 'video' ? fsVideoEl : null),
-    closest: () => null
-  });
-  const fsBtn = {
-    dataset: { vact: 'fs' },
-    closest: (s) => {
-      if (s === '[data-vact]') return fsBtn;
-      if (s === '.msg-video-player') return fsPlayer;
-      return null;
-    }
-  };
-  const clickHandlers = msgDocListeners.get('click') || [];
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: fsBtn })));
-  assert.equal(reqFullscreenCalls, 0, 'video fullscreen must use custom Pic 3 viewer instead of native requestFullscreen');
-  assert.equal(videoViewerCalls.length, 1);
-  assert.equal(videoViewerCalls[0][0], 'https://cdn.example/view/clip.mp4');
-
-  // Shared media drawer also opens Shared Media videos in Ipon.openVideoViewer
-  await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => { },
-    target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
-  })));
-  await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => { },
-    target: { closest: (s) => (s === '[data-drawer-view]' ? { dataset: { drawerView: 'media' } } : null) }
-  })));
-  const drawerMediaHtml = getMsgEl('msg-thread-drawer').innerHTML;
-  assert.match(drawerMediaHtml, /data-open-vid="https:\/\/cdn\.example\/view\/[^"]*preview-clip\.mp4"[\s\S]*?poster="data:image\/svg\+xml/);
-  const vidThumb = {
-    dataset: { openVid: 'https://cdn.example/view/clip2.mp4', vidConv: convId, vidPath: `${convId}/clip2.mp4`, vidName: 'preview-clip.mp4' },
-    closest: (s) => (s === '[data-open-vid]' ? vidThumb : null)
-  };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: vidThumb })));
-  assert.equal(videoViewerCalls.length, 2);
-
-  // In-place reaction & receipt patching does NOT rebuild #msg-messages-list.innerHTML (prevents video flicker!)
-  const bubbleVidCol = makeMsgEl('col-m-vid');
-  let insertedReactHtml = '';
-  bubbleVidCol.querySelector = () => null;
-  bubbleVidCol.insertAdjacentHTML = (_pos, html) => { insertedReactHtml = String(html || ''); };
-  const vidRowNode = {
-    dataset: { msgId: 'm-vid' },
-    querySelector: (sel) => (sel === '.msg-bubble-col' ? bubbleVidCol : null)
-  };
-  getMsgEl('msg-messages-list').querySelector = (sel) => (String(sel).includes('m-vid') ? vidRowNode : null);
-  const writesBeforeReact = threadHtmlWrites;
-  const reactBtn = {
-    dataset: { reactMsg: 'm-vid', reactEmoji: '❤️' },
-    closest: (s) => (s === '[data-react-msg]' ? reactBtn : null)
-  };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: reactBtn })));
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(threadHtmlWrites, writesBeforeReact, 'reacting on a video message must patch reactions in place without resetting innerHTML');
-  assert.ok(insertedReactHtml.includes('❤️'), 'reactions row must update in place on existing video bubble column');
-
-  // Mobile Back unwinds drawer first: drawer subview -> drawer root -> drawer close
-  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // media -> root
-  assert.match(getMsgEl('msg-thread-drawer').innerHTML, /data-drawer-screen="root"/);
-  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // root -> closed
-  assert.equal(getMsgEl('msg-thread-drawer').hidden, true);
-
-  // When window is unfocused (notification shade / lockscreen wake / background window), incoming message marks Delivered ONLY, NEVER Seen
-  const origRpcCallsCount = () => msgRpcCalls.filter((r) => r === 'mark_conversation_read').length;
-  const deliveredCallsCount = () => msgRpcCalls.filter((r) => r === 'mark_messages_delivered').length;
-  focusedState = false;
-  (msgWinListeners.get('blur') || []).forEach((fn) => fn());
-  const readsWhileUnfocusedBefore = origRpcCallsCount();
-  const deliveredBeforeUnfocused = deliveredCallsCount();
-  currentMsgs = [
-    ...currentMsgs,
-    { id: 'm-unfocused-notif', conversation_id: convId, sender_id: peerId, body: 'Just notifying', message_type: 'TEXT', created_at: '2026-11-15T10:03:30Z', attachments: [], reactions: [] }
-  ];
-  mockUnreadFirstId = 'm-unfocused-notif';
-  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-unfocused-notif', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 340));
-  assert.equal(
-    deliveredCallsCount() > deliveredBeforeUnfocused,
-    true,
-    'unfocused window still marks incoming peer message as delivered'
-  );
-  assert.equal(
-    origRpcCallsCount(),
-    readsWhileUnfocusedBefore,
-    'unfocused window (notification shade / lockscreen wake / background app) must NOT mark conversation read'
-  );
-
-  // Returning focus onto open thread marks it read once the user actually views it
-  focusedState = true;
-  (msgWinListeners.get('focus') || []).forEach((fn) => fn());
-  await new Promise((r) => setTimeout(r, 40));
-  const readsWhenFocused = origRpcCallsCount();
-  assert.equal(
-    readsWhenFocused > readsWhileUnfocusedBefore,
-    true,
-    'returning window focus onto active unread thread marks conversation read once user looks at it'
-  );
-
-  // When an overlay dialog (e.g. notification sheet) covers the open thread, incoming message must NOT mark read
-  getMsgEl('notification-dialog').open = true;
-  currentMsgs = [
-    ...currentMsgs,
-    { id: 'm-under-overlay', conversation_id: convId, sender_id: peerId, body: 'Under notif dialog', message_type: 'TEXT', created_at: '2026-11-15T10:03:45Z', attachments: [], reactions: [] }
-  ];
-  mockUnreadFirstId = 'm-under-overlay';
-  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-under-overlay', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 340));
-  assert.equal(
-    origRpcCallsCount(),
-    readsWhenFocused,
-    'overlay dialog over workspace must prevent auto-marking Seen'
-  );
-  getMsgEl('notification-dialog').open = false;
-
-  // Back from open conversation -> chats list
-  assert.equal(msgWin.IponMessages.handleBackNavigation(), true); // convo -> chats list
-  assert.equal(getMsgEl('msg-view-chats').classList.contains('is-mobile-thread'), false);
-
-  // When back on Chats list (including 721px-820px compact viewports), incoming peer message MUST NOT auto-mark read!
-  msgWin.innerWidth = 800;
-  const readsBeforeIncoming = msgRpcCalls.filter((r) => r === 'mark_conversation_read').length;
-  currentMsgs = [
-    ...currentMsgs,
-    { id: 'm-unseen-list', conversation_id: convId, sender_id: peerId, body: 'Are you there?', message_type: 'TEXT', created_at: '2026-11-15T10:04:00Z', attachments: [], reactions: [] }
-  ];
-  msgTableHandlers.get('messages')?.({ eventType: 'INSERT', new: { id: 'm-unseen-list', conversation_id: convId, sender_id: peerId } });
-  await new Promise((r) => setTimeout(r, 340));
-  assert.equal(
-    msgRpcCalls.filter((r) => r === 'mark_conversation_read').length,
-    readsBeforeIncoming,
-    'peer message arriving while compact/mobile user is on Chats list (<= 820px) must NOT auto-mark seen'
-  );
-  msgWin.innerWidth = 390;
-  assert.equal(msgWin.IponMessages.handleBackNavigation(), false, 'at root Chats list handleBackNavigation returns false so dashboard step unwinds next');
-  getMsgEl('msg-workspace-dialog').close();
-  assert.equal(getMsgEl('msg-view-chats').classList.contains('is-mobile-thread'), false);
-
-  // Pic 1 + Pic 3: Reopen thread -> Chat Info drawer redesign + full-column theme sync (pane + stage)
-  await msgWin.IponMessages.openWorkspace({ tab: 'chats', conversationId: convId });
-  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'paper');
-  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'paper');
-
-  // Open drawer -> verify Pic 1 structure (header X, avatar, 2-col Chat Action icon cards, 5 circular Theme swatches, Media & files cards)
-  await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => { },
-    target: { closest: (s) => (s === '#msg-thread-info-toggle' ? { dataset: {} } : null) }
-  })));
-  const rootDrawerHtml = getMsgEl('msg-thread-drawer').innerHTML;
-  assert.match(rootDrawerHtml, /<h3>Chat Info &amp; Options<\/h3>[\s\S]*?class="dialog-close msg-drawer-close-btn" id="msg-drawer-close"/);
-  assert.match(rootDrawerHtml, /class="msg-drawer-action-btn" data-conv-act="pin"[\s\S]*?<svg[^>]*>[\s\S]*?<span>Pin chat<\/span>/);
-  assert.match(rootDrawerHtml, /class="msg-drawer-action-btn is-danger" data-social-action="block"[\s\S]*?<span>Block user<\/span>/);
-  assert.match(rootDrawerHtml, /class="msg-theme-chip is-active" data-conv-theme="paper"[\s\S]*?class="msg-theme-swatch is-paper"[\s\S]*?class="msg-theme-label">Paper<\/span>/);
-  assert.match(rootDrawerHtml, /data-conv-theme="midnight"[\s\S]*?class="msg-theme-swatch is-midnight"[\s\S]*?class="msg-theme-label">Midnight<\/span>/);
-  assert.match(rootDrawerHtml, /data-drawer-view="media"[\s\S]*?Shared media[\s\S]*?<span class="msg-drawer-nav-count">1<\/span>/);
-  assert.match(rootDrawerHtml, /data-drawer-view="files"[\s\S]*?Shared files[\s\S]*?<span class="msg-drawer-nav-count">0<\/span>/);
-
-  // Switch chat theme to Midnight -> BOTH msg-thread-pane (top header + pinned + bottom composer) AND msg-thread-stage adopt midnight theme
-  const midnightBtn = { dataset: { convTheme: 'midnight' }, closest: (s) => (s === '[data-conv-theme]' ? midnightBtn : null) };
-  await Promise.all(clickHandlers.map((fn) => fn({ stopPropagation: () => { }, target: midnightBtn })));
-  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'midnight', 'top/middle/bottom container must receive chatTheme');
-  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'midnight');
-  assert.match(getMsgEl('msg-thread-drawer').innerHTML, /class="msg-theme-chip is-active" data-conv-theme="midnight"/);
-
-  // Pic 2: Open Messaging & Privacy modal -> verify form grid (without moved username/bio), right-aligned toggle switches, dark save CTA, and blocked accounts section
-  await Promise.all(clickHandlers.map((fn) => fn({
-    stopPropagation: () => { },
-    target: { closest: (s) => (s === '#msg-privacy-btn' ? { dataset: {} } : null) }
-  })));
-  const settingsDialog = getMsgEl('msg-settings-dialog');
-  assert.equal(settingsDialog.open, true);
-  const settingsHtml = getMsgEl('msg-settings-body').innerHTML;
-  assert.match(settingsHtml, /<form id="msg-privacy-form" class="form-grid msg-privacy-form"/);
-  assert.doesNotMatch(settingsHtml, /msg-set-username|msg-set-bio/);
-  assert.match(settingsHtml, /id="msg-set-profile-vis" name="profile_visibility"[\s\S]*?value="EVERYONE"[\s\S]*?Everyone[\s\S]*?value="FRIENDS_OF_FRIENDS"[\s\S]*?Friends of friends[\s\S]*?value="FRIENDS_AND_CONNECTIONS"[\s\S]*?Friends &amp; connections[\s\S]*?value="NOBODY"[\s\S]*?No one/);
-  assert.doesNotMatch(settingsHtml, /name="show_online"|name="show_last_seen"/);
-  assert.match(settingsHtml, /class="msg-switch-row toggle-switch-row field-wide"[\s\S]*?Send &amp; receive read receipts[\s\S]*?<input type="checkbox" class="toggle-switch-input" name="read_receipts"/);
-  assert.match(settingsHtml, /id="msg-settings-save"[\s\S]*?Save messaging settings/);
-  assert.match(settingsHtml, /class="msg-blocked-section"[\s\S]*?class="msg-blocked-count">0<\/span>[\s\S]*?class="msg-blocked-empty"[\s\S]*?You have not blocked anyone\./);
-  // Closing workspace resets active theme back to paper cleanly
-  settingsDialog.close();
-  getMsgEl('msg-workspace-dialog').close();
-  assert.equal(getMsgEl('msg-thread-pane').dataset.chatTheme, 'paper');
-  assert.equal(getMsgEl('msg-thread-stage').dataset.chatTheme, 'paper');
 });
 
 test('username handle & bio live inside My Account profile form across all roles with privacy-safe RPC defaults', () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   const appCss = read('css/app.css');
   const mig126 = read('database/migrations/20261118_126_profile_username_and_bio.sql');
 
@@ -8141,8 +6409,6 @@ test('username handle & bio live inside My Account profile form across all roles
   assert.match(mig127, /char_length\(v_bio\) > 58/);
   assert.match(coreJs, /check_username_available/);
   assert.match(coreJs, /update_own_social_identity/);
-  assert.doesNotMatch(messagesJs, /msg-set-username|msg-set-bio/);
-  assert.match(messagesJs, /update_social_profile_and_privacy',\s*\{\s*p_chat_privacy:\s*nextPrivacy\s*\}/);
   assert.match(appCss, /\.account-dialog \.field textarea/);
   assert.match(appCss, /\.account-bio-counter/);
   assert.match(appCss, /html\[data-theme="dark"\] \.account-password-disclosure summary strong,\s*html\[data-theme="dark"\] \.account-summary-pill strong\s*\{\s*color:\s*var\(--ink\);/);
@@ -8150,93 +6416,6 @@ test('username handle & bio live inside My Account profile form across all roles
   assert.match(mig126, /function public\.update_own_social_identity\(/);
   assert.match(mig126, /p_username text default '__KEEP__'/);
   assert.match(mig126, /p_bio text default '__KEEP__'/);
-});
-
-test('messaging privacy Who can see your profile supports Everyone, Friends of friends, Friends only, and No one across SQL & UI', () => {
-  const mig128 = read('database/migrations/20261118_128_profile_visibility_privacy.sql');
-  const mig129 = read('database/migrations/20261118_129_profile_connections_and_search_privacy.sql');
-  const mig130 = read('database/migrations/20261118_130_default_dp_and_cover_on_pending_request.sql');
-  for (const token of [
-    'create or replace function public.has_direct_chat_connection(',
-    "and c.status = 'ACCEPTED'",
-    'case when v_can_view then v_target.avatar_url else null end',
-    'case when p.id = v_uid or vis.can_view then p.avatar_url else null end',
-    'case when vis.can_view then p.avatar_url else null end',
-    'case when peer_vis.can_view then peer.avatar_url else null end',
-    'case when gmvis.can_view then mp.avatar_url else null end',
-    "'20261118_130'"
-  ]) {
-    assert.ok(mig130.includes(token), 'migration 130 missing ' + token);
-  }
-  const hasConnBody = mig130.match(/function public\.has_direct_chat_connection\([\s\S]*?\$\$;/);
-  assert.ok(hasConnBody, 'Expected has_direct_chat_connection body in migration 130');
-  assert.doesNotMatch(hasConnBody[0], /initiator_id|public\.messages/i);
-
-  const mig131 = read('database/migrations/20261118_131_announcement_reaction_privacy_and_cover_default.sql');
-  const coreJs = read('js/core.js');
-  for (const token of [
-    'create or replace function public.get_announcement_reactions(',
-    'create or replace function public.announcement_author_avatar(',
-    "'profile_visible', vis.can_view",
-    'case when vis.can_view then p.avatar_url else null end',
-    "'20261118_131'"
-  ]) {
-    assert.ok(mig131.includes(token), 'migration 131 missing ' + token);
-  }
-  assert.match(coreJs, /entry\.profile_visible === false \? null : entry\.avatar_url/);
-  for (const token of [
-    'create or replace function public.has_direct_chat_connection(',
-    'create or replace function public.can_view_social_profile(',
-    "'FRIENDS_AND_CONNECTIONS'",
-    "vis.vis_mode <> 'NOBODY'",
-    'public.has_direct_chat_connection(v_uid, p.id)',
-    "'20261118_129'"
-  ]) {
-    assert.ok(mig129.includes(token), 'migration 129 missing ' + token);
-  }
-  const messagesJs = read('js/messages.js');
-  const css = read('css/app.css');
-
-  for (const token of [
-    'create or replace function public.can_view_social_profile(',
-    "'FRIENDS_OF_FRIENDS'",
-    "'FRIENDS_ONLY'",
-    "'NOBODY'",
-    "'profile_visibility'",
-    'create or replace function public.update_social_profile_and_privacy(',
-    'create or replace function public.get_profile_card_appearance(',
-    'create or replace function public.get_social_user_profile(',
-    'create or replace function public.search_social_users(',
-    'create or replace function public.get_social_overview(',
-    'create or replace function public.get_conversations(',
-    "'20261118_128'"
-  ]) {
-    assert.ok(mig128.includes(token), 'migration 128 missing ' + token);
-  }
-  assert.match(messagesJs, /user\.profile_visible === false \? '' : safeDpUrl\(user\.avatar_url\)/);
-  assert.match(messagesJs, /id="msg-set-profile-vis" name="profile_visibility"/);
-  assert.match(messagesJs, /profile_visibility:\s*String\(fd\.get\('profile_visibility'\)/);
-  assert.match(messagesJs, /class="msg-pop-private-note"/);
-  assert.match(css, /\.msg-pop-private-note\s*\{/);
-  assert.match(css, /html\[data-theme="dark"\] \.msg-pop-private-note\s*\{/);
-});
-
-test('chat drawer, messaging privacy dialog, and full-column chat themes declare cohesive light & dark CSS tokens', () => {
-  const appCss = read('css/app.css');
-  // Pic 3: Full-column variables cover header, pinned banner, stage, search bar, and bottom composer
-  assert.match(appCss, /\.msg-thread-pane\[data-chat-theme="midnight"\],\s*html\[data-theme="dark"\] \.msg-thread-pane\[data-chat-theme="midnight"\]/);
-  assert.match(appCss, /\.msg-thread-header\s*\{[^}]*background:\s*var\(--thread-chrome-bg/);
-  assert.match(appCss, /\.msg-pinned-banner\s*\{[^}]*background:\s*var\(--thread-banner-bg/);
-  assert.match(appCss, /\.msg-composer-wrap\s*\{[^}]*background:\s*var\(--thread-chrome-bg/);
-  assert.match(appCss, /#msg-composer-input\s*\{[^}]*background:\s*var\(--thread-input-bg/);
-  // Dark mode must not override swatch chips or composer theme tokens flatly
-  assert.doesNotMatch(appCss, /html\[data-theme="dark"\]\s*\.msg-theme-chip\s*\{[^}]*background:\s*var\(--surface-input\)/);
-  assert.doesNotMatch(appCss, /html\[data-theme="dark"\]\s*#msg-composer-input\s*\{/);
-  // Pic 1 & Pic 2 key styling rules exist
-  assert.match(appCss, /\.msg-theme-swatch\.is-midnight\s*\{/);
-  assert.match(appCss, /\.msg-drawer-action-btn\.is-danger/);
-  assert.match(appCss, /\.msg-settings-save-btn:not\(\.is-busy\)::before/);
-  assert.match(appCss, /\.msg-blocked-count\s*\{/);
 });
 
 test('mobile notifications never auto-inject update alerts on push and omit Download APK buttons even on admin release announcements', async () => {
@@ -8410,189 +6589,6 @@ test('mobile notifications never auto-inject update alerts on push and omit Down
   assert.equal(notifBadge.textContent, '0');
 });
 
-test('presence dot size, Chat Info drawer overlay over pinned banner, inline Friend + Active now header, and native VM mic permission flow work reliably', async () => {
-  const css = read('css/app.css');
-  const messagesJs = read('js/messages.js');
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-  const bgPlugin = read('android/app/src/main/java/com/myipon/app/BackgroundNotificationsPlugin.java');
-
-  // Pic 1: Online/Last Seen presence dots are removed across avatar sizes and thread headers
-  assert.doesNotMatch(css, /\.presence-dot/);
-
-  // Pic 2: Drawer sits as direct child of #msg-thread-active (sibling of .msg-thread-main) and covers pinned banner
-  assert.match(messagesJs, /<div class="msg-thread-active" id="msg-thread-active" hidden>[\s\S]*?<div class="msg-thread-main">[\s\S]*?<\/div>\s*<aside class="msg-thread-drawer" id="msg-thread-drawer" hidden/);
-  assert.match(css, /\.msg-thread-active\s*\{[^}]*position:\s*relative;[^}]*display:\s*flex;[^}]*flex-direction:\s*row;/s);
-  assert.match(css, /\.msg-thread-main\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/s);
-  assert.match(css, /@media\s*\(max-width:\s*980px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0 0 0 auto;[^}]*z-index:\s*30;/s);
-  assert.match(css, /@media\s*\(max-width:\s*820px\)\s*\{\s*\.msg-thread-drawer\s*\{[^}]*width:\s*100%;/s);
-
-  // Pic 3: Status sits cleanly inline beside @username inside .msg-thread-peer-sub (no Friend chip)
-  assert.match(messagesJs, /<div class="msg-thread-peer-sub">[\s\S]*?<small class="msg-peer-status" id="msg-peer-status-text"/);
-  assert.doesNotMatch(messagesJs, /<span class="msg-rel-chip">Friend<\/span>/);
-  assert.match(css, /\.msg-thread-peer-sub\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*flex-wrap:\s*wrap;/s);
-  assert.match(css, /\.msg-peer-status\s*\{[^}]*display:\s*inline-flex;/s);
-
-  // Pic 4: Native Android manifest + Java plugin + JS voice-recording permission state machine
-  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
-  assert.match(bgPlugin, /manifestDeclared[\s\S]*?manifestMissing/);
-
-  const makeEl = (tag = 'div') => {
-    const attrs = new Map();
-    const classes = new Set();
-    return {
-      tagName: String(tag).toUpperCase(),
-      innerHTML: '',
-      textContent: '',
-      value: '',
-      hidden: false,
-      disabled: false,
-      files: [],
-      dataset: {},
-      style: { setProperty() { }, removeProperty() { } },
-      classList: {
-        add: (...c) => c.forEach((x) => classes.add(x)),
-        remove: (...c) => c.forEach((x) => classes.delete(x)),
-        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
-        contains: (c) => classes.has(c)
-      },
-      setAttribute: (k, v) => attrs.set(k, String(v)),
-      getAttribute: (k) => attrs.get(k) ?? null,
-      removeAttribute: (k) => attrs.delete(k),
-      addEventListener() { },
-      removeEventListener() { },
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      closest: () => null,
-      appendChild(n) { return n; },
-      showModal() { this.open = true; },
-      close() { this.open = false; }
-    };
-  };
-  const els = new Map();
-  const getEl = (id) => {
-    if (!els.has(id)) els.set(id, makeEl());
-    return els.get(id);
-  };
-  const docClicks = [];
-  const docStub = {
-    body: Object.assign(makeEl('body'), { dataset: { page: 'dashboard' }, classList: { toggle() { }, add() { }, remove() { }, contains: () => false } }),
-    documentElement: makeEl('html'),
-    getElementById: (id) => getEl(id),
-    createElement: (t) => makeEl(t),
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    addEventListener(type, fn) { if (type === 'click') docClicks.push(fn); },
-    removeEventListener() { }
-  };
-
-  let micBehavior = { granted: false, canAskAgain: true, manifestMissing: false };
-  let getUserMediaCalls = 0;
-  let getUserMediaError = null;
-  const confirmCalls = [];
-  const openSettingsCalls = [];
-  const toasts = [];
-  let recorderStarted = 0;
-
-  const ctx = {
-    window: null,
-    document: docStub,
-    navigator: {
-      userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 myIPONApp/20',
-      onLine: true,
-      mediaDevices: {
-        getUserMedia: async () => {
-          getUserMediaCalls += 1;
-          if (getUserMediaError) throw getUserMediaError;
-          return { getTracks: () => [{ stop() { } }] };
-        }
-      }
-    },
-    MediaRecorder: class {
-      constructor(stream) { this.stream = stream; this.state = 'inactive'; }
-      static isTypeSupported() { return true; }
-      start() { this.state = 'recording'; recorderStarted += 1; }
-      stop() { this.state = 'inactive'; }
-    },
-    Capacitor: {
-      isNativePlatform: () => true,
-      getPlatform: () => 'android',
-      Plugins: {
-        BackgroundNotifications: {
-          ensureMicrophonePermission: async () => ({ ...micBehavior }),
-          openAppSettings: async () => { openSettingsCalls.push(true); return { launched: true }; }
-        }
-      }
-    },
-    Ipon: {
-      profile: { id: 'u1', full_name: 'Juan Dela Cruz' },
-      client: {
-        rpc: async () => ({ data: null, error: null }),
-        channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => { }, untrack: async () => { }, send: async () => { } }),
-        removeChannel() { },
-        storage: { from: () => ({ upload: async () => ({ error: null }) }) }
-      },
-      avatarMarkup: () => '<span></span>',
-      syncPresenceDots() { },
-      bindAvatarFallbacks() { },
-      toast: (msg, type) => toasts.push({ msg, type }),
-      confirmAction: async (opts) => { confirmCalls.push(opts); return true; },
-      friendlyError: (e) => String(e?.message || e)
-    },
-    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
-    setTimeout: () => 0,
-    clearTimeout() { },
-    setInterval: () => 1,
-    clearInterval() { },
-    requestAnimationFrame: (fn) => fn(),
-    addEventListener() { },
-    removeEventListener() { },
-    console
-  };
-  ctx.window = ctx;
-  ctx.MediaRecorder.isTypeSupported = () => true;
-  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
-  await ctx.window.IponMessages.init({ profile: ctx.Ipon.profile });
-
-  const tapVoiceBtn = () => Promise.all(docClicks.map((fn) => fn({
-    target: { closest: (sel) => (sel === '#msg-voice-btn' ? getEl('msg-voice-btn') : null) }
-  })));
-
-  // Scenario A: First deny (canAskAgain: true) does NOT kick user to Settings — leaves system prompt re-triggerable
-  micBehavior = { granted: false, canAskAgain: true, manifestMissing: false };
-  await tapVoiceBtn();
-  assert.equal(confirmCalls.length, 0);
-  assert.equal(getUserMediaCalls, 0);
-  assert.match(toasts.at(-1)?.msg || '', /Allow microphone access when prompted/);
-
-  // Scenario B: User permanently denies twice (canAskAgain: false) -> offers Open Settings cleanly
-  micBehavior = { granted: false, canAskAgain: false, manifestMissing: false };
-  await tapVoiceBtn();
-  assert.equal(confirmCalls.length, 1);
-  assert.equal(confirmCalls[0].confirmLabel, 'Open Settings');
-  assert.equal(openSettingsCalls.length, 1);
-
-  // Scenario C: Old APK without ensureMicrophonePermission on Android fails NotAllowedError -> shows APK update notice with Download APK action
-  const savedBgPlugin = ctx.Capacitor.Plugins.BackgroundNotifications;
-  let micUpdateDownloadCalls = 0;
-  ctx.window.Ipon.openLatestApkDownload = () => { micUpdateDownloadCalls += 1; };
-  ctx.Capacitor.Plugins.BackgroundNotifications = {};
-  getUserMediaError = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
-  await tapVoiceBtn();
-  delete ctx.window.Ipon.openLatestApkDownload;
-  assert.equal(confirmCalls.length, 2);
-  assert.match(confirmCalls[1].title, /App update needed/);
-  assert.equal(confirmCalls[1].confirmLabel, 'Download APK');
-  assert.equal(micUpdateDownloadCalls, 1);
-
-  // Scenario D: New APK where user taps Allow in system prompt -> immediately starts recording
-  ctx.Capacitor.Plugins.BackgroundNotifications = savedBgPlugin;
-  getUserMediaError = null;
-  micBehavior = { granted: true, canAskAgain: true, manifestDeclared: true, manifestMissing: false };
-  await tapVoiceBtn();
-  assert.equal(recorderStarted, 1);
-  assert.equal(getEl('msg-voice-recording').hidden, false);
-});
-
 test('outdated APK detection, Android background wake locks, safety polling, and permission sync hardening stay intact', async () => {
   const vm = await import('node:vm');
   const coreJs = read('js/core.js');
@@ -8622,11 +6618,8 @@ test('outdated APK detection, Android background wake locks, safety polling, and
   assert.match(mainActivity, /onRequestPermissionsResult\(int requestCode, String\[\] permissions, int\[\] grantResults\)/);
   assert.match(mainActivity, /NotificationSyncService\.canStartFromBackground\(this\)/);
   assert.match(mainActivity, /dispatchWindowEvent\("focus"\)/);
-
-  assert.match(bgPlugin, /result\.put\("micManifestDeclared", micManifestDeclared\)/);
-  assert.match(bgPlugin, /result\.put\("micPermissionGranted", micPermissionGranted\)/);
+  assert.doesNotMatch(bgPlugin, /micManifestDeclared|micPermissionGranted/);
   assert.match(bgPlugin, /NotificationPollReceiver\.scheduleNext\(context, 20_000L\)/);
-
   // 2. Service worker & resync cooldown bypass contracts
   assert.match(swJs, /CACHE_NAME\s*=\s*'ipon-shell-v(?:11|12|\d+)'/);
   assert.match(coreJs, /snap\?\.nativeBgStatus\?\.instantSyncRunning === false/);
@@ -8732,26 +6725,17 @@ test('outdated APK detection, Android background wake locks, safety polling, and
   ctx.window = ctx;
   vm.runInNewContext(coreJs, ctx, { filename: 'js/core.js' });
 
-  // Case A: APK missing RECORD_AUDIO (micManifestDeclared === false) shows Update APK and opens download
-  await ctx.window.Ipon.syncDevicePermissionUI();
-  assert.equal(bgRow._pill.textContent, 'Update APK');
-  assert.equal(bgRow._btn.textContent, 'Update APK');
-  assert.equal(bgRow._btn.dataset.bgAction, 'update-apk');
-  const resA = await ctx.window.Ipon.requestBackgroundUsageAccess();
-  assert.equal(resA.needsApkUpdate, true);
-  assert.equal(openedUrls.length, 1);
-  assert.match(openedUrls[0].url, /myIPON\.apk$/);
-
-  // Case B: Older APK bridge lacking requestIgnoreBatteryOptimizations ALSO triggers Update APK
+  // Case A: Older APK bridge lacking requestIgnoreBatteryOptimizations triggers Update APK
   delete ctx.Capacitor.Plugins.BackgroundNotifications.requestIgnoreBatteryOptimizations;
-  nativeStatus = { hasPermission: true, batteryOptimizationIgnored: true, micManifestDeclared: true };
+  nativeStatus = { hasPermission: true, batteryOptimizationIgnored: true };
   await ctx.window.Ipon.syncDevicePermissionUI();
   assert.equal(bgRow._pill.textContent, 'Update APK');
   const resB = await ctx.window.Ipon.requestBackgroundUsageAccess();
   assert.equal(resB.needsApkUpdate, true);
-  assert.equal(openedUrls.length, 2);
+  assert.equal(openedUrls.length, 1);
+  assert.match(openedUrls[0].url, /myIPON\.apk$/);
 
-  // Case C: Shared openLatestApkDownload helper & [data-device-notif-btn] update-apk click open APK URL
+  // Case B: Shared openLatestApkDownload helper & [data-device-notif-btn] update-apk click open APK URL
   await ctx.window.Ipon.bindDeviceNotificationControls();
   const bodyClick = docListeners.get('click');
   assert.equal(typeof bodyClick, 'function');
@@ -8759,27 +6743,18 @@ test('outdated APK detection, Android background wake locks, safety polling, and
   await bodyClick({
     target: { closest: (sel) => (sel === '[data-device-notif-btn]' ? fakeUpdateBtn : null) }
   });
-  assert.equal(openedUrls.length, 3);
+  assert.equal(openedUrls.length, 2);
 });
 
-test('voice waveform fills full width, background prompt buttons avoid vertical bloat and show busy feedback, and sent voice notes render immediately with missing-URL auto-recovery', async () => {
+test('background prompt buttons avoid vertical bloat and show busy feedback cleanly', async () => {
   const vm = await import('node:vm');
   const css = read('css/app.css');
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
 
-  // 1. Pic 1: Waveform stretches full width with zero trailing blank space
-  assert.match(css, /\.msg-voice-wave\s*\{[^}]*justify-content:\s*space-between;[^}]*gap:\s*1\.5px;[^}]*width:\s*100%;/s);
-  const waveMatch = messagesJs.match(/const VOICE_WAVE_HEIGHTS\s*=\s*\[([^\]]+)\]/);
-  assert.ok(waveMatch, 'VOICE_WAVE_HEIGHTS array must exist in js/messages.js');
-  const waveBars = waveMatch[1].split(',').map((s) => Number(s.trim())).filter(Number.isFinite);
-  assert.ok(waveBars.length >= 34, `VOICE_WAVE_HEIGHTS should have at least 34 bars, found ${waveBars.length}`);
-
-  // 2. Pic 2: Prompt action buttons stay compact (no 140px vertical flex stretch) & show crisp .is-busy indicator
+  // Prompt action buttons stay compact (no 140px vertical flex stretch) & show crisp .is-busy indicator
   assert.match(css, /\.button\.is-busy:disabled\s*\{\s*opacity:\s*\.92;\s*cursor:\s*wait;\s*\}/);
   assert.match(css, /\.bg-usage-actions\s+\.button\s*\{\s*flex:\s*0 0 auto;\s*min-height:\s*44px;\s*padding:\s*10px 16px;/);
   assert.match(css, /@media \(max-width:\s*620px\)[\s\S]*?\.bg-usage-actions\s+\.button\s*\{\s*flex:\s*0 0 auto;\s*width:\s*100%;\s*min-height:\s*44px;/);
-
   const makeEl = (tag) => {
     const classes = new Set();
     const listeners = new Map();
@@ -8920,177 +6895,6 @@ test('voice waveform fills full width, background prompt buttons avoid vertical 
   assert.equal(allowBtn.classList.contains('is-busy'), false);
   assert.equal(allowBtn.disabled, false);
   assert.equal(allowBtn.textContent, 'Allow background usage');
-
-  // 3. Pic 3: Own sent voice note uses instant blob previewUrl (0 "Loading voice note…" delay), and missed URLs auto-retry
-  const msgEls = new Map();
-  const getMsgEl = (id) => {
-    if (!msgEls.has(id)) {
-      msgEls.set(id, {
-        id,
-        hidden: false,
-        disabled: false,
-        value: '',
-        innerHTML: '',
-        textContent: '',
-        scrollTop: 0,
-        scrollHeight: 200,
-        clientHeight: 200,
-        dataset: {},
-        style: {},
-        files: null,
-        classList: { contains: () => false, add() { }, remove() { }, toggle() { } },
-        addEventListener() { },
-        focus() { },
-        setAttribute() { },
-        removeAttribute() { },
-        querySelector: () => null,
-        querySelectorAll: () => [],
-        showModal() { this.open = true; },
-        close() { this.open = false; }
-      });
-    }
-    return msgEls.get(id);
-  };
-  const convId = 'conv-voice-1';
-  const meId = 'user-me';
-  const peerId = 'user-peer';
-  let viewUrlCalls = 0;
-  let failViewUrlsFirst = false;
-  let sentMsgs = [
-    { id: 'v-peer-1', sender_id: peerId, body: '', message_type: 'VOICE', created_at: '2026-11-15T10:00:00Z', attachments: [{ path: `${convId}/peer-voice.webm`, name: 'voice.webm', kind: 'audio', duration_seconds: 3, size: 1200 }], reactions: [] }
-  ];
-  let uploadedPath = '';
-  const winMsg = {
-    innerWidth: 1200,
-    innerHeight: 800,
-    addEventListener() { },
-    removeEventListener() { },
-    Ipon: {
-      escapeHtml: (s) => String(s ?? ''),
-      initials: () => 'U',
-      isUserOnline: () => true,
-      bindAvatarFallbacks: () => { },
-      syncPresenceDots: () => { },
-      syncMessagesBadges: () => { },
-      setBusy: () => { },
-      setFieldError: () => { },
-      toast: () => { },
-      friendlyError: (e) => String(e?.message || e),
-      invokeAccountFunction: async (payload) => {
-        if (payload?.action === 'chat-upload-urls') {
-          uploadedPath = `${convId}/own-voice.webm`;
-          return { uploads: [{ path: uploadedPath, token: 'tok-v', signedUrl: 'https://upload.test/v', name: 'voice.webm', type: 'audio/webm' }] };
-        }
-        if (payload?.action === 'chat-view-urls') {
-          viewUrlCalls += 1;
-          if (failViewUrlsFirst) {
-            failViewUrlsFirst = false;
-            return { urls: {} };
-          }
-          return { urls: Object.fromEntries((payload.paths || []).map((p) => [p, `https://cdn.example/view/${encodeURIComponent(p)}`])) };
-        }
-        return {};
-      },
-      rpc: async (name, params) => {
-        if (name === 'get_conversations') {
-          return [{ id: convId, status: 'ACCEPTED', initiator_id: peerId, is_incoming_request: false, peer: { id: peerId, full_name: 'Peer', allow_online_status: true }, unread_count: 0, marked_unread: false, last_message_at: '2026-11-15T10:00:00Z', last_message_preview: 'Voice' }];
-        }
-        if (name === 'get_conversation_messages') {
-          return { conversation: { id: peerId, conversation_id: convId, full_name: 'Peer', status: 'ACCEPTED', friendship_status: 'FRIENDS', allow_online_status: true, receipts_enabled: true }, has_older: false, unread_first_id: null, pinned_messages: [], messages: sentMsgs };
-        }
-        if (name === 'get_social_overview') {
-          return { me: { id: meId, chat_privacy: {} }, friends: [], incoming_requests: [], sent_requests: [], blocked_users: [] };
-        }
-        if (name === 'mark_messages_delivered') return 0;
-        if (name === 'send_chat_message') {
-          const confirmed = { id: 'v-mine-1', sender_id: meId, body: '', message_type: 'VOICE', created_at: '2026-11-15T10:01:00Z', attachments: params.p_attachments || [], reactions: [] };
-          sentMsgs = [...sentMsgs, confirmed];
-          return confirmed;
-        }
-        return null;
-      },
-      client: {
-        from: () => ({ select: () => ({ like: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
-        channel: () => ({ on() { return this; }, subscribe() { return this; }, send: async () => { } }),
-        removeChannel: () => { }
-      }
-    }
-  };
-  let loadingQueryMatches = false;
-  const docMsgListeners = new Map();
-  const docMsg = {
-    documentElement: { dataset: {} },
-    visibilityState: 'visible',
-    body: { insertAdjacentHTML() { }, appendChild() { } },
-    createElement: () => makeEl('div'),
-    getElementById: (id) => getMsgEl(id),
-    querySelector: (sel) => (sel === '#msg-messages-list .msg-att-loading' && loadingQueryMatches ? {} : null),
-    querySelectorAll: () => [],
-    addEventListener(ev, fn) {
-      if (!docMsgListeners.has(ev)) docMsgListeners.set(ev, []);
-      docMsgListeners.get(ev).push(fn);
-    }
-  };
-  winMsg.Ipon.openAudioUnlock = undefined;
-  winMsg.Ipon.supabase = null;
-  class FakeBlob { constructor(parts = [], opts = {}) { this.parts = parts; this.type = opts.type || 'audio/webm'; this.size = 1024; } }
-  class FakeAudioFile extends FakeBlob { constructor(parts, name, opts) { super(parts, opts); this.name = name; } }
-  class MockXhr {
-    open() { }
-    setRequestHeader() { }
-    send() { this.status = 200; this.onload?.(); }
-  }
-  class MockURL extends URL { }
-  MockURL.createObjectURL = () => 'blob:own-voice-instant';
-  MockURL.revokeObjectURL = () => { };
-  const msgCtx = {
-    window: winMsg,
-    document: docMsg,
-    navigator: { userAgent: 'Mozilla/5.0' },
-    location: { origin: 'https://myipon.example', search: '' },
-    XMLHttpRequest: MockXhr,
-    Blob: FakeBlob,
-    File: FakeAudioFile,
-    URL: MockURL,
-    CSS: { escape: (v) => String(v) },
-    URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, Date, JSON, Promise, RegExp, Error, Intl,
-    setTimeout,
-    clearTimeout,
-    setInterval: () => 0,
-    clearInterval: () => { },
-    requestAnimationFrame: (fn) => fn(),
-    console
-  };
-  winMsg.window = winMsg;
-  vm.runInNewContext(messagesJs, msgCtx, { filename: 'js/messages.js' });
-  assert.match(messagesJs, /stopVoiceRecorderStream[\s\S]*?const previewUrl\s*=\s*typeof URL\?\.createObjectURL === 'function'\s*\?\s*URL\.createObjectURL\(file \|\| blob\)\s*:\s*'';/);
-
-  await winMsg.IponMessages.init({ id: meId, role: 'MEMBER', status: 'ACTIVE', full_name: 'Me' });
-
-  // Open thread when chat-view-urls temporarily returns empty -> should show loading placeholder then auto-recover!
-  failViewUrlsFirst = true;
-  await winMsg.IponMessages.openWorkspace({ conversationId: convId });
-  const listEl = getMsgEl('msg-messages-list');
-  assert.match(listEl.innerHTML, /Loading voice note/);
-  loadingQueryMatches = true;
-  await new Promise((r) => setTimeout(r, 550));
-  loadingQueryMatches = false;
-  assert.match(listEl.innerHTML, /<audio class="msg-att-audio"[^>]*src="https:\/\/cdn\.example\/view\//);
-  assert.doesNotMatch(listEl.innerHTML, /Loading voice note/);
-
-  // Sending own audio attachment skips chat-view-urls completely and plays local blob URL immediately
-  const callsBeforeOwnSend = viewUrlCalls;
-  (docMsgListeners.get('change') || []).forEach((fn) => fn({
-    target: { id: 'msg-file-input', value: 'sel', files: [new FakeAudioFile(['a'], 'voice-1.webm', { type: 'audio/webm' })] }
-  }));
-  await Promise.all((docMsgListeners.get('submit') || []).map((fn) => fn({
-    preventDefault() { },
-    target: { id: 'msg-composer-form', closest: (s) => (s === '#msg-composer-form' ? getMsgEl('msg-composer-form') : null) }
-  })));
-  await new Promise((r) => setTimeout(r, 120));
-  assert.match(listEl.innerHTML, /src="blob:own-voice-instant"/);
-  assert.doesNotMatch(listEl.innerHTML, /Loading voice note/);
-  assert.equal(viewUrlCalls, callsBeforeOwnSend);
 });
 
 test('Android background sync uses vector icon, JWT-safe REST polling, exact/restart wakeups, and multi-key Edge broadcast', () => {
@@ -9144,7 +6948,7 @@ test('mobile hides page/section descriptions only on <=720px, preserves 1-char c
   const syncService = read('android/app/src/main/java/com/myipon/app/NotificationSyncService.java');
   const syncWorker = read('android/app/src/main/java/com/myipon/app/NotificationSyncWorker.java');
 
-  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.page-header p:not\(\.eyebrow\),\.panel-header > div > p:not\(#audit-count\),\.platform-overview-heading p,\.account-dialog-title p,\.account-section-heading p,\.account-session-copy p,\.settings-session-copy p,\.review-subtitle,\.msg-brand p,\.msg-friends-hero-copy p,\.msg-panel-header p:not\(\[id\]\),\.form-dialog:not\(\.bg-usage-dialog\):not\(\.recovery-dialog\) \.form-dialog-header:not\(\.bg-usage-header\) > div > p:not\(\.eyebrow\)/);
+  assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.page-header p:not\(\.eyebrow\),\.panel-header > div > p:not\(#audit-count\),\.platform-overview-heading p,\.account-dialog-title p,\.account-section-heading p,\.account-session-copy p,\.settings-session-copy p,\.review-subtitle,\.form-dialog:not\(\.bg-usage-dialog\):not\(\.recovery-dialog\) \.form-dialog-header:not\(\.bg-usage-header\) > div > p:not\(\.eyebrow\)/);
   assert.match(css, /\.page-header p:not\(\.eyebrow\)\s*\{\s*max-width:660px;/);
 
   assert.match(migration080, /check \(char_length\(btrim\(message\)\) between 1 and 500\)/i);
@@ -9164,153 +6968,6 @@ test('mobile hides page/section descriptions only on <=720px, preserves 1-char c
   assert.match(syncWorker, /public static void enqueueImmediateSync\(/);
 });
 
-test('voice recording bar uses forest-emerald capsule, gold RECORDING label, serif timer, active mic circle, and mobile zero-overflow fit', async () => {
-  const vm = await import('node:vm');
-  const messagesJs = read('js/messages.js');
-  const css = read('css/app.css');
-
-  // CSS visual & mobile circle/pill contracts
-  assert.match(css, /\.msg-composer-form\.is-recording\s*\{\s*align-items:\s*center;/);
-  assert.match(css, /\.msg-tool-btn\s*\{[\s\S]*?aspect-ratio:\s*1\s*\/\s*1;/);
-  assert.match(css, /\.msg-tool-btn\.is-recording,\s*\.msg-composer-form\.is-recording #msg-voice-btn\s*\{[\s\S]*?background:\s*#e3efe8;[\s\S]*?border-color:\s*#16533e;[\s\S]*?color:\s*#16533e;/);
-  assert.match(css, /\.msg-voice-recording\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?#10241d/);
-  assert.match(css, /\.msg-voice-rec-label\s*\{[\s\S]*?letter-spacing:\s*\.12em;[\s\S]*?color:\s*#e4c378;/);
-  assert.match(css, /#msg-voice-timer\s*\{[\s\S]*?"IPON Serif"[\s\S]*?font-variant-numeric:\s*tabular-nums;[\s\S]*?color:\s*#f6f2e8;/);
-  assert.match(css, /\.msg-voice-recording \.msg-voice-cancel\s*\{[\s\S]*?border-radius:\s*18px;/);
-  assert.match(css, /\.msg-voice-recording \.msg-voice-send\s*\{[\s\S]*?flex-direction:\s*row;[\s\S]*?background:\s*#e4c378;[\s\S]*?color:\s*#0e221b;/);
-  assert.match(css, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
-  assert.match(css, /@media\s*\(max-width:\s*380px\)[\s\S]*?\.msg-tool-btn\s*\{\s*width:\s*30px;\s*height:\s*30px;/);
-  assert.match(css, /\.msg-thread-pane\[data-chat-theme="midnight"\] \.msg-voice-recording[\s\S]*?#122921/);
-
-  // Markup keeps semantic labels, two-line "Send voice", and 0:00 timer
-  assert.match(messagesJs, /id="msg-voice-recording"[^>]*>[\s\S]*?class="msg-voice-rec-label">RECORDING<[\s\S]*?id="msg-voice-timer">0:00<[\s\S]*?id="msg-voice-cancel">Cancel<[\s\S]*?id="msg-voice-send"><span>Send<\/span>\s*<span>voice<\/span></);
-
-  // Runtime VM test: starting & cancelling toggles .is-recording, aria-pressed, and tabular clock text cleanly
-  const els = new Map();
-  const makeEl = () => {
-    const classes = new Set();
-    const attrs = new Map();
-    return {
-      hidden: false,
-      disabled: false,
-      value: '',
-      textContent: '',
-      innerHTML: '',
-      children: [],
-      style: { setProperty() { } },
-      dataset: {},
-      classList: {
-        add: (...c) => c.forEach((x) => classes.add(x)),
-        remove: (...c) => c.forEach((x) => classes.delete(x)),
-        toggle: (c, f) => (f === undefined ? (classes.has(c) ? classes.delete(c) : classes.add(c)) : (f ? classes.add(c) : classes.delete(c))),
-        contains: (c) => classes.has(c)
-      },
-      setAttribute: (k, v) => attrs.set(k, String(v)),
-      getAttribute: (k) => attrs.get(k) ?? null,
-      addEventListener() { },
-      removeEventListener() { },
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      closest: () => null,
-      appendChild(n) { return n; },
-      showModal() { },
-      close() { }
-    };
-  };
-  const getEl = (id) => {
-    if (!els.has(id)) els.set(id, makeEl());
-    return els.get(id);
-  };
-  const docClicks = [];
-  let timerCb = null;
-  let nowMs = 10_000;
-  const FakeDate = class extends Date {
-    static now() { return nowMs; }
-  };
-  const ctx = {
-    window: null,
-    document: {
-      body: Object.assign(makeEl(), { dataset: { page: 'dashboard' }, classList: { toggle() { }, add() { }, remove() { }, contains: () => false } }),
-      documentElement: makeEl(),
-      getElementById: (id) => getEl(id),
-      createElement: () => makeEl(),
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      addEventListener(type, fn) { if (type === 'click') docClicks.push(fn); },
-      removeEventListener() { }
-    },
-    navigator: {
-      userAgent: 'Mozilla/5.0',
-      onLine: true,
-      mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) }
-    },
-    MediaRecorder: class {
-      constructor(stream) { this.stream = stream; this.state = 'inactive'; }
-      static isTypeSupported() { return true; }
-      start() { this.state = 'recording'; }
-      stop() { this.state = 'inactive'; this.onstop?.(); }
-    },
-    Ipon: {
-      profile: { id: 'u1', full_name: 'Juan Dela Cruz' },
-      client: {
-        rpc: async () => ({ data: null, error: null }),
-        channel: () => ({ on() { return this; }, subscribe() { return this; }, track: async () => { }, untrack: async () => { }, send: async () => { } }),
-        removeChannel() { },
-        storage: { from: () => ({ upload: async () => ({ error: null }) }) }
-      },
-      avatarMarkup: () => '',
-      syncPresenceDots() { },
-      bindAvatarFallbacks() { },
-      toast() { },
-      confirmAction: async () => true,
-      friendlyError: (e) => String(e?.message || e)
-    },
-    Date: FakeDate,
-    URL, URLSearchParams, Map, Set, Object, Array, String, Number, Boolean, Math, JSON, Promise, RegExp, Error, Intl,
-    setTimeout: () => 0,
-    clearTimeout() { },
-    setInterval(fn) { timerCb = fn; return 77; },
-    clearInterval() { timerCb = null; },
-    requestAnimationFrame: (fn) => fn(),
-    addEventListener() { },
-    removeEventListener() { },
-    console
-  };
-  ctx.window = ctx;
-  ctx.MediaRecorder.isTypeSupported = () => true;
-  vm.runInNewContext(messagesJs, ctx, { filename: 'js/messages.js' });
-  await ctx.window.IponMessages.init({ profile: ctx.Ipon.profile });
-
-  // Start recording
-  await Promise.all(docClicks.map((fn) => fn({
-    target: { closest: (sel) => (sel === '#msg-voice-btn' ? getEl('msg-voice-btn') : null) }
-  })));
-  assert.equal(getEl('msg-voice-recording').hidden, false);
-  assert.equal(getEl('msg-composer-input').hidden, true);
-  assert.equal(getEl('msg-send-btn').hidden, true);
-  assert.equal(getEl('msg-composer-form').classList.contains('is-recording'), true);
-  assert.equal(getEl('msg-voice-btn').classList.contains('is-recording'), true);
-  assert.equal(getEl('msg-voice-btn').getAttribute('aria-pressed'), 'true');
-  assert.equal(getEl('msg-voice-timer').textContent, '0:00');
-
-  // Tick 7 seconds -> displays 0:07 without "Recording " prefix
-  nowMs += 7_000;
-  timerCb?.();
-  assert.equal(getEl('msg-voice-timer').textContent, '0:07');
-
-  // Cancel -> clears .is-recording, restores composer, and resets timer to 0:00
-  await Promise.all(docClicks.map((fn) => fn({
-    target: { closest: (sel) => (sel === '#msg-voice-cancel' ? getEl('msg-voice-cancel') : null) }
-  })));
-  assert.equal(getEl('msg-voice-recording').hidden, true);
-  assert.equal(getEl('msg-composer-input').hidden, false);
-  assert.equal(getEl('msg-send-btn').hidden, false);
-  assert.equal(getEl('msg-composer-form').classList.contains('is-recording'), false);
-  assert.equal(getEl('msg-voice-btn').classList.contains('is-recording'), false);
-  assert.equal(getEl('msg-voice-btn').getAttribute('aria-pressed'), 'false');
-  assert.equal(getEl('msg-voice-timer').textContent, '0:00');
-});
-
 test('migration 081, Edge cron, Storage media uploads, 500-char limits, annual archives, Terms/Privacy, and 14-day retention reminder work cleanly', async () => {
   const vm = await import('node:vm');
   const mig081 = read('database/migrations/20261116_081_data_retention_storage_hygiene_and_archives.sql');
@@ -9321,7 +6978,6 @@ test('migration 081, Edge cron, Storage media uploads, 500-char limits, annual a
   const policyJs = read('js/policy.js');
   const authJs = read('js/auth.js');
   const accountHtml = read('account.html');
-  const messagesJs = read('js/messages.js');
   const reportsJs = read('js/reports.js');
   const reportsHtml = read('reports.html');
 
@@ -9345,8 +7001,6 @@ test('migration 081, Edge cron, Storage media uploads, 500-char limits, annual a
   // 2. 500-char caps across SQL & frontend forms while preserving unlimited announcements
   assert.match(mig081, /add constraint messages_body_check check \(char_length\(body\) <= 500\)/i);
   assert.match(mig081, /add constraint record_comments_body_length_check check \(char_length\(btrim\(coalesce\(body, ''\)\)\) <= 500\)/i);
-  assert.match(messagesJs, /id="msg-composer-input"[^>]*maxlength="500"/);
-  assert.match(messagesJs, /Messages &amp; media older than 90 days automatically clear/);
   assert.match(coreJs, /id="record-thread-input"[^>]*maxlength="500"/);
   for (const page of ['contributions.html', 'withdrawals.html', 'expenses.html', 'user.html', 'dashboard.html', 'members.html', 'savings.html']) {
     assert.match(read(page), /name="notes"[^>]*maxlength="500"|id="(?:user|member|goal|quick)-notes"[^>]*maxlength="500"/);
@@ -9631,7 +7285,7 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
         },
         rpc: async (fnName, args) => {
           rpcCalls.push({ fnName, args });
-          return { data: { policy_accepted_version: args?.p_version || '2026-11-22', policy_accepted_at: '2026-11-22T05:00:00Z' }, error: null };
+          return { data: { policy_accepted_version: args?.p_version || '2026-11-23', policy_accepted_at: '2026-11-23T05:00:00Z' }, error: null };
         }
       })
     },
@@ -9689,8 +7343,8 @@ test('migration 083, detailed Pic 1 & 2 policy dialogs, and mandatory 1x-per-acc
   await agreeBtn._emit('click');
   assert.equal(rpcCalls.length, 1);
   assert.equal(rpcCalls[0].fnName, 'accept_current_policy');
-  assert.equal(rpcCalls[0].args.p_version, '2026-11-22');
-  assert.equal(userProfile.policy_accepted_version, '2026-11-22');
+  assert.equal(rpcCalls[0].args.p_version, '2026-11-23');
+  assert.equal(userProfile.policy_accepted_version, '2026-11-23');
   assert.equal(consentDlg.open, false);
   assert.equal(afterAcceptTriggered, true);
   assert.equal(ctx.window.Ipon.hasAcceptedCurrentPolicy(userProfile), true);
@@ -9750,9 +7404,9 @@ test('migration 084, ongoing savings protection, 30-day completion bin, print bo
   assert.match(loginHtml, /30-day Recycle Bin/i);
   assert.match(policyJs, /Ongoing savings &amp; active goals are never deleted while you keep saving/i);
   assert.match(policyJs, /30-day Recycle Bin/i);
-  assert.match(loginHtml, /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
-  assert.match(policyJs, /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
-  assert.match(read('terms.html'), /Notifications and direct chat messages arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.match(loginHtml, /In-app notifications arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.match(policyJs, /In-app notifications arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
+  assert.match(read('terms.html'), /In-app notifications arrive in real time on your device as long as myIPON stays in your phone's Recent Apps/i);
   assert.doesNotMatch(loginHtml, /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
   assert.doesNotMatch(policyJs, /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
   assert.doesNotMatch(read('terms.html'), /delivered in-app only|not guaranteed to arrive when the app is completely closed/i);
@@ -10005,8 +7659,7 @@ test('migrations 086-087 restore Member transparency + Super Admin name rules, f
     assert.match(latestPol, /'MEMBER'/);
   }
   const latestCleanup = [...schema.matchAll(/create or replace function public\.run_data_retention_cleanup[\s\S]*?\$\$;/gi)].pop()?.[0] || '';
-  assert.match(latestCleanup, /delete from public\.call_sessions[\s\S]*?coalesce\(ended_at,\s*started_at\)\s*<\s*v_call_cutoff/i);
-  assert.doesNotMatch(latestCleanup, /coalesce\(ended_at,\s*started_at,\s*created_at\)/i);
+  assert.doesNotMatch(latestCleanup, /delete from public\.(?:messages|call_sessions)/i);
   assert.match(latestCleanup, /delete from public\.contribution_settings cs/i);
   assert.match(mig086, /v_is_backend_maintenance boolean :=[\s\S]*?auth\.uid\(\) is null/i);
   assert.match(mig086, /alter publication supabase_realtime add table public\.%I/i);
@@ -10311,7 +7964,6 @@ test('migration 092 and UI fixes elevate floating utilities, clean Brainier grou
   // Pic 1: Message and notification triggers stay above scrolling workspace cards
   assert.match(appCss, /\.app-sidebar\s*\{[^}]*z-index:190;/);
   assert.match(appCss, /\.sidebar-utility\[data-notifications-open\]\{[^}]*z-index:192;/);
-  assert.match(appCss, /\.sidebar-utility\[data-messages-open\]\s*\{[^}]*z-index:\s*192;/);
   assert.match(appCss, /\.notification-dialog\{[^}]*z-index:185;/);
   assert.match(heroCss, /\.dashboard-sidebar\s*\{[^}]*z-index:190;/);
 
@@ -10748,16 +8400,13 @@ test('Dashboard header renders before summary failure, Solo quick-record falls b
   assert.match(appCss, /\.users-filters #users-search[\s\S]*?min-width:\s*256px/);
 });
 
-test('createRealtimeChannel and Realtime callers avoid adding postgres_changes or presence callbacks onto subscribed channels', () => {
+test('createRealtimeChannel and Realtime callers avoid adding postgres_changes callbacks onto subscribed channels', () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   assert.match(coreJs, /function createRealtimeChannel\(baseTopic, options = undefined, clientArg = null\)/);
   assert.match(coreJs, /createRealtimeChannel\(`live:\$\{name\}:/);
   assert.match(coreJs, /createRealtimeChannel\(`notifications:\$\{profile\.id\}`/);
   assert.match(coreJs, /createRealtimeChannel\(`record-thread-\$\{recordType\}-\$\{recordId\}`/);
-  assert.match(coreJs, /existingPresence[\s\S]*realtime:ipon-active-presence/);
-  assert.match(messagesJs, /ipon\(\)\.createRealtimeChannel/);
-
+  assert.doesNotMatch(coreJs, /realtime:ipon-active-presence/);
   const helperSrc = coreJs.match(/let rtChannelNonce = 0;[\s\S]*?return options === undefined \? client\.channel\(baseTopic\) : client\.channel\(baseTopic, options\);\s*\}/)?.[0];
   assert.ok(helperSrc, 'createRealtimeChannel helper should exist');
   const activeChannels = [];
@@ -10843,7 +8492,7 @@ test('Super Admin selects feature_requests.allow_credit and uses updated script 
   const saHtml = read('super-admin.html');
 
   assert.match(saJs, /from\('feature_requests'\)\.select\('[^']*allow_credit[^']*'\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-03/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-04/);
   assert.doesNotMatch(saJs, /RELEASE_STYLE_ANGLES|stripReleaseFluffTails/);
 });
 
@@ -10854,7 +8503,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-14/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-15/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {
@@ -10881,7 +8530,7 @@ test('Migration 099 and Super Admin Users surface each user actual latest specif
   assert.doesNotMatch(saJs, /from\(['"](?:contributions|withdrawals|expenses|members|messages|budget_configs|budget_expenses)['"]\)/);
   assert.match(saJs, /Ipon\.client\.rpc\('super_admin_user_last_activities'\)/);
   assert.match(saJs, /function formatUserActivityLabel\(activity\)/);
-  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-03/);
+  assert.match(saHtml, /js\/super-admin\.js\?v=20261123-04/);
 
   // Verify formatUserActivityLabel handles both new specific RPC rows and legacy fallback events
   const fnMatch = saJs.match(/function formatUserActivityLabel\(activity\)\s*\{[\s\S]*?\n  \}/);
@@ -11736,7 +9385,6 @@ test('username sign-in and required signup username enforce format, uniqueness, 
 
 test('post-login username setup modal prompts legacy users without usernames, preserves bio, and chains secondary prompts', async () => {
   const coreJs = read('js/core.js');
-  const messagesJs = read('js/messages.js');
   const css = read('css/app.css');
 
   assert.match(coreJs, /function maybeShowUsernameSetupModal\(/);
@@ -11750,9 +9398,6 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.match(coreJs, /record_contribution:\s*'record-addition'/);
   assert.match(coreJs, /record_withdrawal:\s*'record-deduction'/);
   assert.match(coreJs, /record_expense:\s*'record-expense'/);
-  assert.match(coreJs, /send_chat_message:\s*'msg-send'/);
-  assert.match(messagesJs, /playUiSound\?\.\('msg-typing'\)/);
-  assert.match(messagesJs, /playUiSound\?\.\('msg-receive'\)/);
   assert.match(coreJs, /rpc\('update_own_social_identity',\s*\{\s*p_username:\s*clean,\s*p_bio:\s*profile\.bio \?\? null\s*\}\)/);
   assert.match(css, /\.username-setup-dialog\s*\{/);
   assert.match(css, /\.username-setup-control input\[aria-invalid="true"\]/);
@@ -11961,14 +9606,13 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   assert.equal(Ipon.isUiSoundEnabled(), true);
   for (const kind of [
     'type', 'chip', 'available', 'error', 'success', 'confetti', 'unlock', 'celebration',
-    'msg-send', 'msg-typing', 'msg-receive', 'msg-voice-start', 'msg-voice-cancel', 'record-addition', 'record-deduction', 'record-expense'
+    'record-addition', 'record-deduction', 'record-expense'
   ]) {
     assert.equal(Ipon.playUiSound(kind), true, `Expected playUiSound('${kind}') to succeed`);
   }
-  assert.ok(oscStarts >= 35, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
-  assert.ok(burstStarts >= 7, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
+  assert.ok(oscStarts >= 20, `Expected harmonic oscillators to play across all sounds, got ${oscStarts}`);
+  assert.ok(burstStarts >= 4, `Expected tactile/confetti noise bursts to play, got ${burstStarts}`);
   assert.ok(maxGainValue >= 4.0, `Expected boosted UI sound master gain >= 4.0, got ${maxGainValue}`);
-  assert.equal(compressorCount, 1, 'Expected a single cached output soft-limiter compressor per AudioContext');
 
   // Successful financial & chat RPCs automatically trigger their respective UI sounds
   const beforeRpcOsc = oscStarts;
@@ -11985,31 +9629,6 @@ test('post-login username setup modal prompts legacy users without usernames, pr
   Ipon.setUiSoundEnabled(true);
 });
 
-test('screenshot notices have a protected group toggle and readable event styling', () => {
-  const chat = read('js/messages.js');
-  const css = read('css/app.css');
-  const schema = read('database/schema.sql');
-  const activity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(chat, /data-chat-protection="screenshot_notices" aria-checked=/);
-  assert.match(chat, /data-anonymous-toggle aria-checked=/);
-  assert.match(read('database/migrations/20261122_170_anonymous_group_chats.sql'), /role in \('OWNER', 'ADMIN'\)/);
-  assert.match(chat, /const screenshotRowHtml = nativePrivacy && screenshotEligible/);
-  assert.match(chat, /data-chat-protection-retry[\s\S]*?refreshPeerClientPlatforms\?\.\(peerIds\)/);
-  assert.match(read('js/core.js'), /reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession/);
-  assert.match(chat, /function clearActiveThreadSelection\(\) \{\s*syncNativeScreenshotLock\(null\)/);
-  assert.match(read('js/core.js'), /getPlatform\?\.\(\) === 'android'[\s\S]*BackgroundNotifications\?\.setScreenshotBlocked === 'function'/);
-  assert.match(chat, /!ignoreFocus && typeof document.visibilityState/);
-  assert.match(activity, /screenCaptureCallback = this::dispatchScreenCaptured/);
-  assert.match(activity, /if \(!screenshotMonitoringEnabled \|\| screenshotObserver != null\) return;/);
-  assert.match(manifest, /READ_MEDIA_IMAGES" \/>/);
-  assert.match(chat, /isThreadActivelyVisible\(\{ ignoreFocus: true \}\)/);
-  assert.match(chat, /msg-system-event\$\{screenshotNotice \? ' is-screenshot'/);
-  assert.match(css, /\.msg-system-event\.is-screenshot span,\s*\.msg-system-event\.is-vanish span \{[\s\S]*color: #0b3428/);
-  assert.match(schema, /v_conv.kind = 'GROUP' and not v_conv.screenshot_notices_enabled then\s+return null/);
-  assert.match(chat, /\['vanish_enabled', 'vanish_disabled', 'vanish_updated'\]\.includes\(m\.metadata\?\.event\)/);
-  assert.match(schema, /when 'vanish_enabled' then ' turned on vanishing messages for '/);
-});
 test('early user profile effect remains a permanent, grant-only recognition', () => {
   const migration = read('database/migrations/20261122_162_early_user_profile_effect.sql');
   const schema = read('database/schema.sql');

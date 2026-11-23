@@ -221,7 +221,7 @@
     storageGrid.innerHTML = [
       `<div class="super-admin-storage-stat"><span>Cloud Storage buckets</span><strong>${formatBytes(cloudBytes)}</strong><small>${cloudObjs} stored object${cloudObjs === 1 ? '' : 's'} · ${Number(s.pending_storage_deletions || 0)} queued cleanup</small></div>`,
       `<div class="super-admin-storage-stat"><span>Receipts &amp; inline media</span><strong>${formatBytes(Number(s.contribution_receipts_bytes || 0) + Number(s.expense_receipts_bytes || 0) + annBytes)}</strong><small>${Number(s.contribution_receipts_count || 0)} contrib + ${Number(s.expense_receipts_count || 0)} expense · ${reclaimCount} old (${formatBytes(reclaimBytes)})</small></div>`,
-      `<div class="super-admin-storage-stat"><span>Audit &amp; message tables</span><strong>${formatBytes(auditBytes)}</strong><small>${Number(s.audit_logs_count || 0)} audit logs · ${Number(s.messages_count || 0)} active chats (90d TTL)</small></div>`,
+      `<div class="super-admin-storage-stat"><span>Audit &amp; activity logs</span><strong>${formatBytes(auditBytes)}</strong><small>${Number(s.audit_logs_count || 0)} audit logs (90d TTL)</small></div>`,
       `<div class="super-admin-storage-stat"><span>Avatars, QR &amp; archives</span><strong>${formatBytes(s.avatars_and_qr_bytes)}</strong><small>${Number(s.annual_archives_count || 0)} annual financial roll-up${Number(s.annual_archives_count || 0) === 1 ? '' : 's'}</small></div>`
     ].join('');
     if (cleanupReceiptsBtn) {
@@ -2764,18 +2764,18 @@
   runRetentionBtn?.addEventListener('click', async () => {
     const accepted = await Ipon.confirmAction({
       title: 'Run retention & storage cleanup now?',
-      message: 'Runs the nightly retention pass immediately: clears 90+ day chat messages/files, expired logs & notifications, drains Storage deletions, and processes 6-month inactive account warnings (7-day email notice before purge).',
+      message: 'Runs the nightly retention pass immediately: clears expired audit logs, notifications, and 30-day Bin items, drains Storage deletions, and processes 6-month inactive account warnings (7-day email notice before purge).',
       acceptLabel: 'Run retention sweep'
     });
     if (!accepted) return;
     Ipon.setBusy(runRetentionBtn, true, 'Running…');
     try {
       const res = await Ipon.invokeAccountFunction({ action: 'super-admin-run-maintenance' });
-      const msgCount = Number(res?.sql_summary?.messages_deleted || 0);
+      const notifCount = Number(res?.sql_summary?.notifications_deleted || 0);
       const storageCount = Number(res?.storage_files_removed || 0);
       const warned = Number(res?.inactive_warned_emails || 0);
       const purged = Number(res?.inactive_users_purged || 0);
-      Ipon.toast(`Sweep done: ${msgCount} messages, ${storageCount} storage files, ${warned} warned, ${purged} purged.`);
+      Ipon.toast(`Sweep done: ${notifCount} alerts, ${storageCount} storage files, ${warned} warned, ${purged} purged.`);
       await load();
     } catch (error) {
       Ipon.toast(Ipon.friendlyError(error), 'error');
