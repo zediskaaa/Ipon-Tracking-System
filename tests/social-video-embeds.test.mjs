@@ -261,7 +261,48 @@ test('social video embeds runtime activates inline player, resolves shortlinks, 
   assert.equal(xOk, true);
   assert.equal(xCard.classList.contains('is-playing'), true);
   assert.match(xCard._stage.innerHTML, /<video class="msg-social-video" src="https:\/\/woslmwokhhyszkgevnli\.supabase\.co\/functions\/v1\/resolve-social-embed\?media=/);
-  assert.match(xCard._stage.innerHTML, /controls playsinline/);
+  assert.match(xCard._stage.innerHTML, /controls controlsList="nofullscreen" playsinline/);
+  assert.match(xCard._stage.innerHTML, /data-social-maximize="1"/);
+
+  // Maximizing an X/Instagram video delegates to Ipon.openVideoViewer with synced time/mute & hideDownload
+  let viewerCall = null;
+  const maxApi = loadSocialEmbedsModule({
+    Ipon: {
+      openVideoViewer(src, title, sub, dlName, opts) {
+        viewerCall = { src, title, sub, dlName, opts };
+      }
+    }
+  });
+  let inlinePausedForMax = false;
+  const maxVideoEl = {
+    isConnected: true,
+    src: 'https://instagram.fmnl9-7.fna.fbcdn.net/o1/v/t16/reel.mp4',
+    currentSrc: 'https://instagram.fmnl9-7.fna.fbcdn.net/o1/v/t16/reel.mp4',
+    poster: 'https://instagram.fmnl4-6.fna.fbcdn.net/v/t51/thumb.jpg',
+    currentTime: 7.5,
+    duration: 30,
+    muted: false,
+    paused: false,
+    ended: false,
+    pause() { inlinePausedForMax = true; }
+  };
+  const maxCard = {
+    dataset: { socialUrl: 'https://www.instagram.com/reel/Cop84x6u7CP/', socialProvider: 'instagram' },
+    querySelector(sel) {
+      if (sel === 'video.msg-social-video') return maxVideoEl;
+      if (sel === '.msg-social-title') return { textContent: 'Quick savings reel' };
+      return null;
+    }
+  };
+  assert.equal(maxApi.maximizeSocialVideo(maxCard), true);
+  assert.equal(inlinePausedForMax, true);
+  assert.equal(viewerCall?.src, maxVideoEl.src);
+  assert.equal(viewerCall?.opts?.startTime, 7.5);
+  assert.equal(viewerCall?.opts?.muted, false);
+  assert.equal(viewerCall?.opts?.hideDownload, true);
+  viewerCall.opts.onClose({ currentTime: 12.25, muted: true });
+  assert.equal(maxVideoEl.currentTime, 12.25);
+  assert.equal(maxVideoEl.muted, true);
 
   const igCard = makeCard('https://www.instagram.com/reel/Cop84x6u7CP/');
   const igOk = await api.activateSocialPlayer(igCard, async () => ({
@@ -395,6 +436,9 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   assert.match(mainActivity, /addJavascriptInterface\(new ShareBridge\(\), "IponNativeShare"\)/);
   assert.match(mainActivity, /handleShareIntent\(getIntent\(\)\)/);
   assert.match(mainActivity, /myipon:native-share/);
+  assert.match(mainActivity, /public void onShowCustomView\(View view, CustomViewCallback callback\)/);
+  assert.match(mainActivity, /public void onHideCustomView\(\)/);
+  assert.match(mainActivity, /if \(exitFullscreenCustomView\(\)\)/);
 
   // PWA Web Share Target
   const webManifest = JSON.parse(read('manifest.webmanifest'));
@@ -423,21 +467,25 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-15"><\/script>\s*<script src="js\/messages\.js\?v=20261123-11"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-16"><\/script>\s*<script src="js\/messages\.js\?v=20261123-12"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
-  // core.js exports share capture + Edge Function resolver
+  // core.js exports share capture, Edge Function resolver, fullscreen Back exit, and browser popstate Back for video viewer
   const coreJs = read('js/core.js');
   assert.match(coreJs, /function capturePendingShareFromUrl\(\)/);
   assert.match(coreJs, /function consumePendingSharePayload\(\)/);
   assert.match(coreJs, /async function invokeSocialEmbedResolver\(rawUrl\)/);
   assert.match(coreJs, /resolve-social-embed/);
+  assert.match(coreJs, /const fsEl = document\.fullscreenElement \|\| document\.webkitFullscreenElement;/);
+  assert.match(coreJs, /iponVideoViewer:\s*true/);
+  assert.match(coreJs, /dl\.hidden = Boolean\(opts\?\.hideDownload\);/);
 
-  // messages.js integrates inline social embed rendering, player triggers, swipe-to-reply over video, and #msg-share-dialog
+  // messages.js integrates inline social embed rendering, player triggers, maximize viewer, swipe-to-reply over video, and #msg-share-dialog
   const msgJs = read('js/messages.js');
   assert.match(msgJs, /id="msg-share-dialog"/);
   assert.match(msgJs, /renderSocialEmbedsBlockHtml/);
   assert.match(msgJs, /activateSocialPlayer/);
+  assert.match(msgJs, /maximizeSocialVideo/);
   assert.match(msgJs, /stopOtherActivePlayers/);
   assert.match(msgJs, /openShareLinkDialog/);
   assert.match(msgJs, /myipon:native-share/);

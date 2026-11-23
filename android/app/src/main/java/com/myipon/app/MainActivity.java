@@ -77,6 +77,9 @@ public class MainActivity extends BridgeActivity {
     private long lastWindowFocusAtMs;
     private long lastScreenshotEventAtMs;
     private ValueCallback<Uri[]> pendingFileCallback = null;
+    private FrameLayout customFullscreenContainer = null;
+    private View customFullscreenView = null;
+    private WebChromeClient.CustomViewCallback customFullscreenCallback = null;
 
     private final ActivityResultLauncher<Intent> sourceFilePickerLauncher = registerForActivityResult(
         new ActivityResultContracts.StartActivityForResult(),
@@ -356,6 +359,45 @@ public class MainActivity extends BridgeActivity {
             if (getBridge() != null) {
                 webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
                     @Override
+                    public void onShowCustomView(View view, CustomViewCallback callback) {
+                        if (view == null) {
+                            super.onShowCustomView(view, callback);
+                            return;
+                        }
+                        if (customFullscreenView != null) {
+                            exitFullscreenCustomView();
+                        }
+                        customFullscreenView = view;
+                        customFullscreenCallback = callback;
+                        final ViewGroup contentRoot = findViewById(android.R.id.content);
+                        if (contentRoot != null) {
+                            final FrameLayout container = new FrameLayout(MainActivity.this);
+                            container.setBackgroundColor(Color.BLACK);
+                            container.setClickable(true);
+                            container.setFocusable(true);
+                            container.addView(view, new FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                Gravity.CENTER
+                            ));
+                            contentRoot.addView(container, new ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            ));
+                            customFullscreenContainer = container;
+                        } else {
+                            super.onShowCustomView(view, callback);
+                        }
+                    }
+
+                    @Override
+                    public void onHideCustomView() {
+                        if (!exitFullscreenCustomView()) {
+                            super.onHideCustomView();
+                        }
+                    }
+
+                    @Override
                     public boolean onShowFileChooser(
                         WebView wv,
                         ValueCallback<Uri[]> filePathCallback,
@@ -414,6 +456,9 @@ public class MainActivity extends BridgeActivity {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
+                if (exitFullscreenCustomView()) {
+                    return;
+                }
                 final OnBackPressedCallback self = this;
                 final WebView currentWebView = getBridge() != null ? getBridge().getWebView() : null;
                 if (currentWebView == null) {
@@ -440,6 +485,24 @@ public class MainActivity extends BridgeActivity {
                 );
             }
         });
+    }
+
+    private boolean exitFullscreenCustomView() {
+        if (customFullscreenView == null && customFullscreenContainer == null) {
+            return false;
+        }
+        final FrameLayout container = customFullscreenContainer;
+        final WebChromeClient.CustomViewCallback callback = customFullscreenCallback;
+        customFullscreenContainer = null;
+        customFullscreenView = null;
+        customFullscreenCallback = null;
+        if (container != null && container.getParent() instanceof ViewGroup) {
+            ((ViewGroup) container.getParent()).removeView(container);
+        }
+        if (callback != null) {
+            try { callback.onCustomViewHidden(); } catch (Throwable ignored) { }
+        }
+        return true;
     }
 
     private void performDefaultBack(OnBackPressedCallback callback) {

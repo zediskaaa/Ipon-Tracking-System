@@ -7826,6 +7826,12 @@
         }
         return;
       }
+      const socialMaxBtn = ev.target.closest?.('[data-social-maximize]');
+      if (socialMaxBtn) {
+        const card = socialMaxBtn.closest?.('.msg-social-card');
+        if (card) window.IponSocialEmbeds?.maximizeSocialVideo?.(card);
+        return;
+      }
       const socialCloseBtn = ev.target.closest?.('[data-social-close]');
       if (socialCloseBtn) {
         const card = socialCloseBtn.closest?.('.msg-social-card');

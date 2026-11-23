@@ -76,6 +76,7 @@
 
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11.04-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14Z"/></svg>';
   const EXTERNAL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 14 20 4M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>';
+  const MAXIMIZE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
   const CLOSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
 
   const resolveCache = new Map();
@@ -743,9 +744,12 @@
       stage.innerHTML = `
         <div class="msg-social-player-bar">
           <span class="msg-social-player-tag">${iconSvg}<span>${escapeHtml(badgeLabel)}</span></span>
-          <button type="button" class="dialog-close msg-social-close-btn" data-social-close="1" aria-label="Close inline video player" title="Close player">${CLOSE_SVG}</button>
+          <div class="msg-social-player-actions">
+            <button type="button" class="msg-social-fs-btn" data-social-maximize="1" aria-label="Maximize video" title="Maximize">${MAXIMIZE_SVG}</button>
+            <button type="button" class="dialog-close msg-social-close-btn" data-social-close="1" aria-label="Close inline video player" title="Close player">${CLOSE_SVG}</button>
+          </div>
         </div>
-        <video class="msg-social-video" src="${escapeHtml(videoUrl)}"${safePoster ? ` poster="${escapeHtml(safePoster)}"` : ''} controls playsinline preload="auto"${loopAttr} aria-label="${escapeHtml(resolved?.title || badgeLabel)}"></video>`;
+        <video class="msg-social-video" src="${escapeHtml(videoUrl)}"${safePoster ? ` poster="${escapeHtml(safePoster)}"` : ''} controls controlsList="nofullscreen" playsinline preload="auto"${loopAttr} aria-label="${escapeHtml(resolved?.title || badgeLabel)}"></video>`;
 
       const videoEl = stage.querySelector?.('video.msg-social-video');
       if (videoEl) {
@@ -905,6 +909,56 @@
     };
   }
 
+  function maximizeSocialVideo(cardEl) {
+    if (!cardEl) return false;
+    const videoEl = cardEl.querySelector?.('video.msg-social-video');
+    if (!videoEl) return false;
+    const src = String(videoEl.currentSrc || videoEl.src || '').trim();
+    if (!src || !isSafeVideoUrl(src)) return false;
+    const rawUrl = cardEl.dataset?.socialUrl || '';
+    const cached = getCachedMeta(rawUrl);
+    const provider = cardEl.dataset?.socialProvider || cached?.provider || '';
+    const badge = cached?.badge || PROVIDER_META[provider]?.label || 'Video';
+    const title = String(cardEl.querySelector?.('.msg-social-title')?.textContent || cached?.title || badge).trim();
+    const subtitle = cached?.author ? `${cached.author} · ${badge}` : badge;
+    if (typeof window !== 'undefined' && typeof window.Ipon?.openVideoViewer === 'function') {
+      const wasPlaying = !videoEl.paused && !videoEl.ended;
+      try { videoEl.pause?.(); } catch { }
+      window.Ipon.openVideoViewer(src, title, subtitle, '', {
+        poster: videoEl.poster || '',
+        startTime: Number(videoEl.currentTime || 0),
+        muted: Boolean(videoEl.muted),
+        autoplay: true,
+        hideDownload: true,
+        onClose: ({ currentTime, muted } = {}) => {
+          if (!videoEl || videoEl.isConnected === false) return;
+          try {
+            if (typeof muted === 'boolean') videoEl.muted = muted;
+            if (Number.isFinite(currentTime) && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+              videoEl.currentTime = Math.max(0, Math.min(videoEl.duration, currentTime));
+            }
+            if (wasPlaying) {
+              // Leave paused cleanly on return unless user presses play again
+              videoEl.pause?.();
+            }
+          } catch { }
+        }
+      });
+      return true;
+    }
+    try {
+      if (typeof videoEl.requestFullscreen === 'function') {
+        videoEl.requestFullscreen();
+        return true;
+      }
+      if (typeof videoEl.webkitEnterFullscreen === 'function') {
+        videoEl.webkitEnterFullscreen();
+        return true;
+      }
+    } catch { }
+    return false;
+  }
+
   const api = Object.freeze({
     extractUrls,
     parseSocialVideoUrl,
@@ -917,6 +971,7 @@
     renderSocialEmbedCardHtml,
     renderSocialEmbedsBlockHtml,
     activateSocialPlayer,
+    maximizeSocialVideo,
     resetCardToPoster,
     stopOtherActivePlayers,
     hydrateVisibleSocialMeta,

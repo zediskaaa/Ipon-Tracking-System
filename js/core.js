@@ -14199,9 +14199,22 @@
           dlBtn.removeAttribute('aria-busy');
         }
       });
+      window.addEventListener('popstate', () => {
+        if (dialog.open && dialog._historyPushed && !window.history?.state?.iponVideoViewer) {
+          dialog._closedByPopstate = true;
+          dialog._historyPushed = false;
+          dialog.close();
+        }
+      });
       dialog.addEventListener('close', () => {
         clearTimeout(hideChromeTimer);
         try { videoEl.pause?.(); } catch { }
+        const shouldPopHistory = Boolean(dialog._historyPushed && !dialog._closedByPopstate);
+        dialog._historyPushed = false;
+        dialog._closedByPopstate = false;
+        if (shouldPopHistory && window.history?.state?.iponVideoViewer) {
+          try { window.history.back(); } catch { }
+        }
         const onClose = dialog._onClose;
         dialog._onClose = null;
         if (typeof onClose === 'function') {
@@ -14224,6 +14237,7 @@
     titleEl.textContent = title || 'Video';
     subEl.textContent = baseSub;
     subEl.hidden = !baseSub;
+    dl.hidden = Boolean(opts?.hideDownload);
     dl.href = raw;
     dl.removeAttribute('target');
     const cleanDl = String(downloadName || '').trim();
@@ -14246,7 +14260,18 @@
       else videoEl.addEventListener('loadedmetadata', applyStart, { once: true });
     }
     dialog._syncUi?.();
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      const isNativeShell = Boolean(window.Capacitor?.isNativePlatform?.());
+      if (!isNativeShell && typeof window.history?.pushState === 'function' && !dialog._historyPushed) {
+        try {
+          const baseState = window.history.state && typeof window.history.state === 'object' ? window.history.state : {};
+          window.history.pushState({ ...baseState, iponVideoViewer: true }, '');
+          dialog._historyPushed = true;
+          dialog._closedByPopstate = false;
+        } catch { }
+      }
+      dialog.showModal();
+    }
     if (opts?.autoplay !== false) {
       Promise.resolve(videoEl.play?.()).then(() => {
         dialog._syncUi?.();
@@ -14258,6 +14283,11 @@
   }
 
   function handleNativeBack() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+      try { (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); } catch { }
+      return 'handled';
+    }
     if (window.IponMessages?.dismissTransientMenus?.()) return 'handled';
 
     for (const id of ['ipon-video-viewer', 'ipon-image-viewer']) {

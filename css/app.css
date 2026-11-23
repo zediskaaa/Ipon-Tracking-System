@@ -27406,6 +27406,13 @@ small .ipon-cents {
   font-weight: 700;
   pointer-events: auto;
 }
+.msg-social-player-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+.msg-social-fs-btn,
 .msg-social-close-btn {
   pointer-events: auto;
   width: 28px;
@@ -27423,12 +27430,19 @@ small .ipon-cents {
   color: #ffffff;
   cursor: pointer;
 }
+.msg-social-fs-btn svg,
 .msg-social-close-btn svg {
   width: 14px;
   height: 14px;
   stroke: currentColor;
   stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   fill: none;
+}
+.msg-social-fs-btn:hover {
+  background: rgba(16, 80, 61, .92);
+  border-color: rgba(242, 193, 78, .68);
 }
 .msg-social-close-btn:hover {
   background: rgba(196, 52, 45, .92);
