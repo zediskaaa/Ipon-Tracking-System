@@ -332,7 +332,8 @@ test('all three role dashboards subscribe to permitted database changes', () => 
   const realtimeHelper = core.match(/function subscribeToChanges[\s\S]*?return channel;/)?.[0] || '';
   assert.match(realtimeHelper, /\['INSERT', 'UPDATE'\]/);
   assert.doesNotMatch(realtimeHelper, /'DELETE'/);
-  assert.match(realtimeHelper, /const autoSyncTimer = setInterval\([\s\S]*?\}, 60000\);/);
+  assert.match(realtimeHelper, /const autoSyncTimer = setInterval\([\s\S]*?\}, 600000\);/);
+  assert.match(realtimeHelper, /document\.hasFocus\?\.\(\) === false/);
   assert.match(read('js/dashboard.js'), /subscribeToChanges\('dashboard'/);
   assert.match(read('js/user.js'), /subscribeToChanges\('member-dashboard'/);
   assert.match(read('js/reports.js'), /subscribeToChanges\('reports'/);
@@ -11338,7 +11339,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-09/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-10/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

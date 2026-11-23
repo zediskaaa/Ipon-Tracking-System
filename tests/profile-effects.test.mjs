@@ -1231,7 +1231,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
   assert.match(css, /\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxb,\s*\.msg-profile-popover\[data-effect-scope="full"\]\s*>\s*canvas\.fxf\s*\{[^}]*height:\s*100%\s*!important;/s);
   assert.match(css, /\.msg-profile-popover \.msg-pop-apps-slot,/);
-  assert.match(sw, /ipon-shell-v255/);
+  assert.match(sw, /ipon-shell-v256/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);
@@ -1480,4 +1480,13 @@ test('Super Admin unlocked profile effects open in a responsive modal with bulk 
   assert.match(css, /\.effect-manage-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(195px,\s*1fr\)\);[^}]*overflow-y:\s*auto;/s);
   assert.match(css, /@media \(max-width: 640px\)\s*\{[\s\S]*?\.effect-manage-toolbar\s*\{\s*grid-template-columns:\s*1fr;\s*\}[\s\S]*?\.effect-manage-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.effect-manage-grid\s*\{\s*grid-template-columns:\s*1fr;\s*\}/);
+});
+
+test('creator effect reads do not rewrite already permanent acknowledged grants', () => {
+  const migration = read('database/migrations/20261123_185_avoid_redundant_creator_effect_writes.sql');
+  const schema = read('database/schema.sql');
+  const guardedUpsert = /on conflict \(user_id, effect_id\) do update[\s\S]*?where profile_effect_grants\.is_permanent is distinct from true\s+or profile_effect_grants\.expires_at is not null\s+or profile_effect_grants\.acknowledged_at is null;/;
+  assert.match(migration, /create or replace function public\.get_own_profile_effects\(\)/);
+  assert.match(migration, guardedUpsert);
+  assert.match(schema.slice(schema.lastIndexOf('create or replace function public.get_own_profile_effects()')), guardedUpsert);
 });

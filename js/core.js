@@ -12275,11 +12275,12 @@
     } catch { }
     const autoSyncTimer = setInterval(() => {
       if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+      if (!window.Capacitor && document.hasFocus?.() === false) return;
       if (document.querySelector('dialog[open]')) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       run();
-    }, 60000);
+    }, 600000);
     document.addEventListener('visibilitychange', resume);
     document.addEventListener('resume', resume);
     window.addEventListener('focus', resume);
