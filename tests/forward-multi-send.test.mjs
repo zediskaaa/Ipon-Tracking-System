@@ -207,4 +207,9 @@ test('Forward modal renders fixed-size thumbnail link previews, deduplicates sel
   await emitClick(doneTarget);
   assert.equal(fwdDialog.open, false);
   assert.equal(closedCount, 1);
+
+  // 5) Forwarded tag renders OUTSIDE .msg-bubble (upper-right on outgoing .is-mine messages) so social embeds / rounded bubbles never clip it
+  assert.match(messagesJs, /<div class="msg-bubble-col">\s*\$\{senderNameHtml\}\s*\$\{replyHtml\}\s*\$\{fwdHtml\}\s*<div class="msg-bubble-wrap">/);
+  assert.doesNotMatch(messagesJs, /const bubbleContent =[\s\S]{0,360}\$\{fwdHtml\}/);
+  assert.match(appCss, /\.msg-row\.is-mine \.msg-forwarded-tag\s*\{[^}]*align-self:\s*flex-end;/s);
 });

@@ -8810,9 +8810,46 @@ mark.msg-search-hit {
   border-radius: 3px;
 }
 .msg-forwarded-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 0 0 4px 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: rgba(18, 56, 44, .07);
+  border: 1px solid rgba(18, 56, 44, .10);
   font-size: 11px;
-  opacity: .75;
-  margin-bottom: 3px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  color: var(--thread-muted, #476156);
+  user-select: none;
+}
+.msg-forwarded-tag svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.msg-row.is-mine .msg-forwarded-tag {
+  align-self: flex-end;
+  margin: 0 4px 4px 0;
+}
+.msg-thread-stage[data-chat-theme="midnight"] .msg-forwarded-tag,
+html[data-theme="dark"] .msg-forwarded-tag {
+  background: rgba(157, 194, 177, .12);
+  border-color: rgba(157, 194, 177, .18);
+  color: #a8cbba;
+}
+.msg-thread-stage[data-chat-theme="emerald"] .msg-forwarded-tag {
+  background: rgba(14, 74, 53, .10);
+  border-color: rgba(14, 74, 53, .14);
+  color: #0e4a35;
 }
 .msg-reply-quote {
   width: fit-content;

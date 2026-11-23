@@ -16,6 +16,7 @@
   const VIDEO_MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" stroke="none"/></svg>';
   const MSG_REACT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.25"/><path d="M8.5 14.3s1.4 2.1 3.5 2.1 3.5-2.1 3.5-2.1"/><circle cx="9.2" cy="10" r="1.15" fill="currentColor" stroke="none"/><circle cx="14.8" cy="10" r="1.15" fill="currentColor" stroke="none"/></svg>';
   const MSG_REPLY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>';
+  const MSG_FORWARD_TAG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>';
   const MSG_MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.75" fill="currentColor" stroke="none"/></svg>';
   const MSG_PLUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5"/><line x1="5.5" y1="12" x2="18.5" y2="12"/></svg>';
   const MSG_PIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
@@ -4468,7 +4469,7 @@
           </button>`
         : '';
 
-      const fwdHtml = !isDeleted && m.forwarded_from_id ? '<div class="msg-forwarded-tag">Forwarded</div>' : '';
+      const fwdHtml = !isDeleted && m.forwarded_from_id ? `<div class="msg-forwarded-tag">${MSG_FORWARD_TAG_SVG}<span>Forwarded</span></div>` : '';
 
       // Group reactions by emoji
       const reactionHtml = isDeleted ? '' : renderReactionsRowHtml(m);
@@ -4483,7 +4484,7 @@
         ? { hasTopMedia: false, hasAudioOnly: false }
         : getBubbleMediaLayout(m.attachments, {
             hasText: Boolean(m.body),
-            hasHeaderMeta: Boolean(fwdHtml)
+            hasHeaderMeta: false
           });
       const bodyHtml = m.body ? `<p class="msg-text">${formatMessageBodyHtml(m.body, searchQuery)}</p>` : '';
       const socialEmbedHtml = !isDeleted && m.body && window.IponSocialEmbeds?.renderSocialEmbedsBlockHtml
@@ -4500,12 +4501,12 @@
         overlay: isMediaOnly
       });
       const bubbleContent = isDeleted
-        ? `${fwdHtml}<p class="msg-deleted-note">This message was unsent.</p>${metaHtml}`
+        ? `<p class="msg-deleted-note">This message was unsent.</p>${metaHtml}`
         : (isMediaOnly
             ? `${attHtml}${metaHtml}`
             : (hasTopMedia
                 ? `${attHtml}<div class="msg-bubble-body-pad">${bodyHtml}${socialEmbedHtml}${metaHtml}</div>`
-                : `${fwdHtml}${bodyHtml}${socialEmbedHtml}${attHtml}${metaHtml}`));
+                : `${bodyHtml}${socialEmbedHtml}${attHtml}${metaHtml}`));
 
       const isActivePinned = Boolean(isPinned && !isDeleted && state.activePinnedId && m.id === state.activePinnedId);
       return `${dateDivider}${unreadDivider}
@@ -4515,6 +4516,7 @@
           <div class="msg-bubble-col">
             ${senderNameHtml}
             ${replyHtml}
+            ${fwdHtml}
             <div class="msg-bubble-wrap">
               <div class="msg-bubble${isDeleted ? ' is-deleted' : ''}${isActivePinned ? ' is-pinned' : ''}${hasTopMedia ? ' has-top-media' : ''}${isMediaOnly ? ' is-media-only' : ''}${hasAudioOnly ? ' has-audio-only' : ''}${socialEmbedHtml ? ' has-social-embed' : ''}${socialEmbedHtml && socialEmbedHtml.includes('is-portrait') ? ' has-social-portrait' : ''}${vanishStyle ? ' is-vanishing' : ''}"${vanishStyle ? ` style="${vanishStyle}" title="Vanishing message"` : ''}>
                 ${bubbleContent}
