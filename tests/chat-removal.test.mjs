@@ -30,7 +30,7 @@ test('no active HTML, JS, CSS, SW, manifest, CSP, Android, or iOS file reference
   }
 
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'ipon-shell-v264'/);
+  assert.match(sw, /CACHE_NAME = 'ipon-shell-v265'/);
   assert.doesNotMatch(sw, /messages\.js|social-video-embeds\.js|anonymous-avatar\.svg/);
   assert.match(sw, /startsWith\('SOCIAL_'\)/);
 

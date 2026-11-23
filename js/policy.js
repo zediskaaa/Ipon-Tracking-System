@@ -3,6 +3,11 @@
 
   const CURRENT_POLICY_VERSION = '2026-11-23';
   const RETENTION_REMINDER_INTERVAL_MS = 14 * 24 * 60 * 60 * 1000;
+  // Temporary consent popup deferral for existing users across Nov 23, 2026 (Asia/Manila, UTC+08:00).
+  // Automatically expires at 2026-11-24 00:00:00+08:00 with no manual rollback required.
+  const POLICY_CONSENT_DEFER_START_MS = Date.parse('2026-11-23T00:00:00+08:00');
+  const POLICY_CONSENT_DEFER_END_MS = Date.parse('2026-11-24T00:00:00+08:00');
+  let deferredConsentCleanup = null;
 
   const POLICY_TERMS_HTML = `
     <h3>Purpose &amp; non-custodial scope</h3>
@@ -261,10 +266,115 @@
     }
   }
 
-  function maybeShowPolicyConsentModal(profile = ipon().profile, { force = false, onAccept = null } = {}) {
+  function hasPriorPolicyConsent(profile = ipon().profile) {
+    if (!profile?.id) return false;
+    const ver = typeof profile.policy_accepted_version === 'string'
+      ? profile.policy_accepted_version.trim()
+      : '';
+    if (ver) return true;
+    const acceptedAt = typeof profile.policy_accepted_at === 'string'
+      ? profile.policy_accepted_at.trim()
+      : '';
+    if (acceptedAt) return true;
+    try {
+      const cached = String(localStorage.getItem(`ipon_policy_accepted_${profile.id}`) || '').trim();
+      if (cached) return true;
+    } catch { }
+    return false;
+  }
+
+  function isPolicyConsentDeferredNow(profile = ipon().profile, nowMs = Date.now()) {
+    if (!Number.isFinite(nowMs)) return false;
+    if (nowMs < POLICY_CONSENT_DEFER_START_MS || nowMs >= POLICY_CONSENT_DEFER_END_MS) return false;
+    // Preserve mandatory first-time consent for brand-new users who have never accepted any policy version.
+    return hasPriorPolicyConsent(profile);
+  }
+
+  function isSafeToShowDeferredConsent() {
+    if (typeof document === 'undefined' || !document.body) return false;
+    if (document.visibilityState && document.visibilityState !== 'visible') return false;
+    if (document.body.dataset?.page === 'login') return false;
+    if (document.getElementById('ipon-policy-consent-dialog')) return false;
+    if (document.querySelector?.('dialog[open]')) return false;
+    if (document.querySelector?.('[aria-busy="true"], [data-busy="true"], form[data-dirty="true"]')) return false;
+    const activeTag = String(document.activeElement?.tagName || '').toUpperCase();
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return false;
+    if (document.activeElement?.isContentEditable) return false;
+    return true;
+  }
+
+  function clearDeferredPolicyConsentSchedule() {
+    if (typeof deferredConsentCleanup === 'function') {
+      try { deferredConsentCleanup(); } catch { }
+      deferredConsentCleanup = null;
+    }
+  }
+
+  function scheduleDeferredPolicyConsentCheck(profile, { onAccept = null } = {}) {
+    if (!profile?.id || typeof window === 'undefined' || typeof document === 'undefined') return;
+    clearDeferredPolicyConsentSchedule();
+
+    let expiryTimer = null;
+    let retryTimer = null;
+    let active = true;
+
+    const cleanup = () => {
+      active = false;
+      clearTimeout(expiryTimer);
+      clearTimeout(retryTimer);
+      document.removeEventListener?.('visibilitychange', onOpportunity);
+      document.removeEventListener?.('focusout', onOpportunity);
+      window.removeEventListener?.('focus', onOpportunity);
+      window.removeEventListener?.('pagehide', cleanup);
+    };
+
+    const armExpiryTimer = () => {
+      clearTimeout(expiryTimer);
+      const remaining = POLICY_CONSENT_DEFER_END_MS - Date.now();
+      if (remaining > 0) {
+        expiryTimer = setTimeout(onOpportunity, Math.min(remaining + 250, 2147483647));
+      }
+    };
+
+    const onOpportunity = () => {
+      if (!active) return;
+      clearTimeout(retryTimer);
+      if (hasAcceptedCurrentPolicy(profile)) {
+        clearDeferredPolicyConsentSchedule();
+        return;
+      }
+      if (Date.now() < POLICY_CONSENT_DEFER_END_MS) {
+        armExpiryTimer();
+        return;
+      }
+      if (!isSafeToShowDeferredConsent()) {
+        retryTimer = setTimeout(onOpportunity, 5000);
+        return;
+      }
+      clearDeferredPolicyConsentSchedule();
+      maybeShowPolicyConsentModal(profile, { onAccept });
+    };
+
+    document.addEventListener?.('visibilitychange', onOpportunity);
+    document.addEventListener?.('focusout', onOpportunity);
+    window.addEventListener?.('focus', onOpportunity);
+    window.addEventListener?.('pagehide', cleanup, { once: true });
+    deferredConsentCleanup = cleanup;
+    armExpiryTimer();
+  }
+
+  function maybeShowPolicyConsentModal(profile = ipon().profile, { force = false, onAccept = null, nowMs = Date.now() } = {}) {
     if (!profile?.id || typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') return false;
     if (document.body.dataset?.page === 'login') return false;
-    if (!force && hasAcceptedCurrentPolicy(profile)) return false;
+    if (!force && hasAcceptedCurrentPolicy(profile)) {
+      clearDeferredPolicyConsentSchedule();
+      return false;
+    }
+    if (!force && isPolicyConsentDeferredNow(profile, nowMs)) {
+      scheduleDeferredPolicyConsentCheck(profile);
+      return false;
+    }
+    clearDeferredPolicyConsentSchedule();
     let dialog = document.getElementById('ipon-policy-consent-dialog');
     if (dialog) {
       if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
@@ -742,10 +852,15 @@
 
   const exports = {
     CURRENT_POLICY_VERSION,
+    POLICY_CONSENT_DEFER_START_MS,
+    POLICY_CONSENT_DEFER_END_MS,
     openPolicyDialog,
     openRetentionPolicyDialog,
     maybeShowRetentionReminder,
     hasAcceptedCurrentPolicy,
+    hasPriorPolicyConsent,
+    isPolicyConsentDeferredNow,
+    isSafeToShowDeferredConsent,
     maybeShowPolicyConsentModal,
     formatBinExpiry,
     renderBinItemCard,

@@ -39,8 +39,8 @@ test('logged-out landing page does not load application or auth bundles', async 
 test('returning-user session check loads its dependencies and retains the redirect', async () => {
   const result = await runSessionCheck({ 'sb-project-auth-token': '{}' });
   assert.deepEqual(result.scripts.map((script) => script.src), [
-    'js/core.js?v=20261123-17',
-    'js/policy.js?v=20261123-01',
+    'js/core.js?v=20261123-18',
+    'js/policy.js?v=20261123-02',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js'
   ]);
   assert.equal(result.scripts[2].crossOrigin, 'anonymous');

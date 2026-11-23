@@ -4504,6 +4504,219 @@
     });
   }
 
+  const MEMBER_PROFILE_CACHE_TTL_MS = 60_000;
+  const MEMBER_PROFILE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const memberProfileCache = new Map();
+  let activeMemberProfileStage = null;
+  let memberProfileReqSeq = 0;
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('ipon:profile-updated', () => memberProfileCache.clear());
+    window.addEventListener('pagehide', () => {
+      try { activeMemberProfileStage?.destroy?.(); } catch { }
+      activeMemberProfileStage = null;
+    });
+  }
+
+  function memberProfileRoleLabel(role) {
+    const r = String(role || '').trim().toUpperCase();
+    if (r === 'SUPER_ADMIN') return 'Platform Owner';
+    if (r === 'ADMIN') return 'Group Admin';
+    if (r === 'TREASURER') return 'Treasurer';
+    if (r === 'MEMBER') return 'Member';
+    return '';
+  }
+
+  function resolveSafeProfileEffectId(rawEffectId) {
+    const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+    if (!api || typeof api.normalizeEffectId !== 'function') return 'none';
+    const normalized = api.normalizeEffectId(rawEffectId);
+    if (!normalized || normalized === 'none') return 'none';
+    if (typeof api.getEffect === 'function' && !api.getEffect(normalized)) return 'none';
+    return normalized;
+  }
+
+  async function openMemberProfileDialog(userId, fallbackMeta = {}) {
+    if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') return false;
+    const cleanUserId = String(userId || '').trim();
+    const hasValidUserId = MEMBER_PROFILE_UUID_RE.test(cleanUserId);
+    const fallbackName = String(fallbackMeta?.fullName || fallbackMeta?.name || 'Group member').trim() || 'Group member';
+    const fallbackAvatar = isSafeImageRef(fallbackMeta?.avatarUrl) ? String(fallbackMeta.avatarUrl).trim() : '';
+    const triggerEl = fallbackMeta?.triggerEl || null;
+    const reqId = ++memberProfileReqSeq;
+
+    const destroyStage = () => {
+      try { activeMemberProfileStage?.destroy?.(); } catch { }
+      activeMemberProfileStage = null;
+    };
+    destroyStage();
+    document.getElementById('member-profile-dialog')?.remove?.();
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'member-profile-dialog';
+    dialog.className = 'member-profile-dialog';
+    dialog.setAttribute('aria-labelledby', 'member-profile-name');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.innerHTML = `
+      <div class="member-profile-sheet">
+        <button type="button" class="dialog-close member-profile-close" id="member-profile-close" aria-label="Close member profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="member-profile-stage-host" id="member-profile-stage-host"></div>
+      </div>`;
+    document.body.appendChild(dialog);
+
+    const host = dialog.querySelector('#member-profile-stage-host');
+    const closeBtn = dialog.querySelector('#member-profile-close');
+
+    const closeDialog = () => {
+      memberProfileReqSeq += 1;
+      destroyStage();
+      try { window.IponProfileEffects?.stopEffectSfx?.(); } catch { }
+      try { if (dialog.open) dialog.close(); } catch { }
+      dialog.remove?.();
+      if (triggerEl && typeof triggerEl.focus === 'function' && triggerEl.isConnected !== false) {
+        try { triggerEl.focus({ preventScroll: true }); } catch { }
+      }
+    };
+
+    closeBtn?.addEventListener('click', closeDialog);
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) closeDialog();
+    });
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeDialog();
+    });
+
+    const renderCard = ({ profileData = null, loading = false, notice = '', errorText = '', retryFn = null } = {}) => {
+      if (!host || reqId !== memberProfileReqSeq) return;
+      destroyStage();
+      const cardThemes = ['emerald', 'midnight', 'rose', 'amber', 'ocean', 'mono'];
+      const theme = cardThemes.includes(profileData?.card_theme) ? profileData.card_theme : 'emerald';
+      const coverUrl = isSafeImageRef(profileData?.cover_url) ? String(profileData.cover_url).trim() : '';
+      const displayName = String(profileData?.full_name || fallbackName).trim() || 'Group member';
+      const avatarUrl = isSafeImageRef(profileData?.avatar_url) ? String(profileData.avatar_url).trim() : fallbackAvatar;
+      const username = String(profileData?.username || '').trim().replace(/^@+/, '');
+      const roleLabel = memberProfileRoleLabel(profileData?.group_role);
+      const bioText = String(profileData?.bio || '').trim();
+      const groupName = String(profileData?.group_name || '').trim();
+      const badgeTier = String(profileData?.verified_badge_tier || 'NONE').toUpperCase();
+      const badgeHtml = badgeTier !== 'NONE' && profileData?.id
+        ? verifiedBadgesHtml({
+          id: profileData.id,
+          verified_badge_tier: badgeTier,
+          verified_badge_granted_at: profileData.verified_badge_granted_at || null,
+          verified_badge_acknowledged_at: profileData.verified_badge_granted_at || '1'
+        })
+        : '';
+      const socialHtml = profileData?.social_links
+        ? renderSocialAppLinksHtml(sanitizeSocialLinks(profileData.social_links), { variant: 'effects' })
+        : '';
+      const avatarInner = avatarUrl
+        ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}" data-avatar-img><span class="avatar-fallback-inner" hidden>${escapeHtml(initials(displayName))}</span>`
+        : `<span>${escapeHtml(initials(displayName))}</span>`;
+      const metaParts = [username ? `@${username}` : '', roleLabel].filter(Boolean);
+      const safeEffectId = profileData?.profile_visible ? resolveSafeProfileEffectId(profileData.equipped_profile_effect) : 'none';
+      const effectMeta = safeEffectId !== 'none' ? window.IponProfileEffects?.getEffect?.(safeEffectId) : null;
+
+      host.innerHTML = `
+        <div class="effects-card member-profile-card" id="member-profile-card" data-theme="${escapeHtml(theme)}">
+          <div class="effects-banner">${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="">` : ''}</div>
+          <div class="effects-card-body">
+            <div class="effects-card-avatar avatar-circle">${avatarInner}</div>
+            <h3 class="effects-card-name" id="member-profile-name">${escapeHtml(displayName)}${badgeHtml}</h3>
+            ${metaParts.length ? `<p class="effects-card-meta">${escapeHtml(metaParts.join(' · '))}</p>` : ''}
+            ${loading ? '<p class="member-profile-status" role="status" aria-live="polite">Loading profile…</p>' : ''}
+            ${!loading && notice ? `<p class="member-profile-notice" role="status">${escapeHtml(notice)}</p>` : ''}
+            ${!loading && errorText ? `<div class="member-profile-error" role="alert"><span>${escapeHtml(errorText)}</span><button type="button" class="button button-secondary button-xs" id="member-profile-retry">Retry</button></div>` : ''}
+            ${!loading && !notice && bioText ? `<p class="effects-card-bio">${escapeHtml(bioText)}</p>` : ''}
+            ${!loading && !notice && socialHtml ? `<div class="effects-card-apps">${socialHtml}</div>` : ''}
+            ${!loading && !notice && (groupName || effectMeta) ? `<div class="effects-card-groups">${groupName ? `<small>WORKSPACE</small><b>${escapeHtml(groupName)}</b>` : ''}${effectMeta ? `<span class="member-profile-effect-tag">Effect: ${escapeHtml(effectMeta.name)}</span>` : ''}</div>` : ''}
+          </div>
+        </div>`;
+
+      bindAvatarFallbacks(host);
+      if (retryFn) {
+        host.querySelector('#member-profile-retry')?.addEventListener('click', () => retryFn());
+      }
+      const cardEl = host.querySelector('#member-profile-card');
+      const api = typeof window !== 'undefined' ? window.IponProfileEffects : null;
+      if (cardEl && safeEffectId !== 'none' && typeof api?.mountStage === 'function') {
+        activeMemberProfileStage = api.mountStage(cardEl, { effectId: safeEffectId, fps: 60, maxDpr: 2 });
+        requestAnimationFrame?.(() => {
+          activeMemberProfileStage?.refreshGeometry?.();
+          fitVerifiedNameLines(dialog);
+        });
+      } else {
+        requestAnimationFrame?.(() => fitVerifiedNameLines(dialog));
+      }
+    };
+
+    if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+    closeBtn?.focus?.({ preventScroll: true });
+
+    if (!hasValidUserId) {
+      renderCard({
+        notice: 'This contributor does not have a linked myIPON user profile yet.'
+      });
+      return true;
+    }
+
+    const fetchProfile = async ({ bypassCache = false } = {}) => {
+      const cached = !bypassCache ? memberProfileCache.get(cleanUserId) : null;
+      if (cached && (Date.now() - cached.fetchedAt) < MEMBER_PROFILE_CACHE_TTL_MS) {
+        if (cached.data?.profile_visible === false) {
+          renderCard({ notice: 'This profile is not visible in your current workspace.' });
+        } else {
+          renderCard({ profileData: cached.data });
+        }
+        return;
+      }
+      renderCard({ loading: true });
+      try {
+        const data = await rpc('get_group_member_profile', { p_target_id: cleanUserId });
+        if (reqId !== memberProfileReqSeq) return;
+        if (!data || data.profile_visible === false) {
+          memberProfileCache.set(cleanUserId, { fetchedAt: Date.now(), data: { profile_visible: false } });
+          renderCard({ notice: 'This profile is not visible in your current workspace.' });
+          return;
+        }
+        memberProfileCache.set(cleanUserId, { fetchedAt: Date.now(), data });
+        renderCard({ profileData: data });
+      } catch (error) {
+        if (reqId !== memberProfileReqSeq) return;
+        if (currentProfile && String(currentProfile.id) === cleanUserId) {
+          renderCard({
+            profileData: {
+              profile_visible: true,
+              id: currentProfile.id,
+              full_name: currentProfile.full_name,
+              username: currentProfile.username,
+              bio: currentProfile.bio,
+              avatar_url: currentProfile.avatar_url,
+              group_role: currentProfile.role,
+              card_theme: currentProfile.card_theme || 'emerald',
+              cover_url: currentProfile.cover_url || null,
+              equipped_profile_effect: currentProfile.equipped_profile_effect || 'none',
+              verified_badge_tier: effectiveVerifiedBadgeTier(currentProfile),
+              verified_badge_granted_at: currentProfile.verified_badge_granted_at || null,
+              social_links: currentProfile.social_links || {}
+            }
+          });
+          return;
+        }
+        renderCard({
+          errorText: friendlyError(error),
+          retryFn: () => fetchProfile({ bypassCache: true })
+        });
+      }
+    };
+
+    await fetchProfile();
+    return true;
+  }
+
   initVerifiedBadgeTooltip();
   initVerifiedNameLayout();
 
@@ -13733,7 +13946,7 @@
     };
   }
 
-  const CURRENT_POLICY_VERSION = '2026-11-16';
+  const CURRENT_POLICY_VERSION = '2026-11-23';
   const openPolicyDialog = (...args) => window.IponPolicy?.openPolicyDialog?.(...args) ?? false;
   const openRetentionPolicyDialog = (...args) => window.IponPolicy?.openRetentionPolicyDialog?.(...args) ?? false;
   const maybeShowRetentionReminder = (...args) => window.IponPolicy?.maybeShowRetentionReminder?.(...args) ?? false;
@@ -18346,7 +18559,7 @@
     setPendingJoinCode, getPendingJoinCode, clearPendingJoinCode, copyPlainText,
     generateQrMatrix, qrSvgMarkup, downloadInviteQrPng, mountJoinGroupPanel, openJoinGroupDialog, showJoinBlockedDialog, fetchInviteOverview, mountInviteCodePanel, renderJoinRequestsQueue,
     resolveVerifiedBadgeInfo, effectiveVerifiedBadgeTier, verifiedBadgesHtml, fitVerifiedNameLines, refreshVerifiedBadgesCache, registerVerifiedBadges, maybeShowBadgeAwardModal, syncAccountBadgeSection, openCreatorBadgeSupport,
-    refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog,
+    refreshProfileEffectsState, maybeShowEffectAwardModal, openProfileEffectsDialog, openMemberProfileDialog,
     SOCIAL_APPS, validateSocialAppInput, normalizeSocialAppUrl, normalizeSocialAppOrder, reorderSocialAppKeys, sanitizeSocialLinks, serializeSocialLinks, renderSocialAppLinksHtml,
     get profile() { return currentProfile; }
   };

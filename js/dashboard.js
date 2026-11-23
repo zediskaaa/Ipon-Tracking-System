@@ -8,6 +8,8 @@
   let pendingItemsById = new Map();
   let currentChangeRequests = [];
   let pendingChangesByRecord = new Map();
+  let groupProfileByMemberId = new Map();
+  let groupProfileById = new Map();
   let activeDate = null;
   let openModalDate = null;
   let hasSnapshot = false;
@@ -616,17 +618,98 @@
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; return { day, date, activities: byDate.get(date) || [] };
     });
   }
+  function formatCalendarTileAmount(value) {
+    const num = Math.abs(Number(value || 0));
+    if (!Number.isFinite(num)) return Ipon.money(0);
+    const whole = Math.round(num * 100) % 100 === 0;
+    return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
+  }
+  function summarizeDayActivities(activities) {
+    const list = Array.isArray(activities) ? activities : [];
+    const dayEvents = dayEventStatuses(list);
+    let confirmedAdd = 0;
+    let confirmedDed = 0;
+    let confirmedExp = 0;
+    let pendingTotal = 0;
+    let hasConfirmed = false;
+    let hasPending = false;
+    list.forEach((activity) => {
+      const amt = Number(activity?.amount || 0);
+      if (activity?.approval_status === 'PENDING') {
+        hasPending = true;
+        pendingTotal += amt;
+        return;
+      }
+      if (activity?.approval_status === 'CONFIRMED') {
+        hasConfirmed = true;
+        if (activity.activity_type === 'DEDUCTION') confirmedDed += amt;
+        else if (activity.activity_type === 'EXPENSE') confirmedExp += amt;
+        else confirmedAdd += amt;
+      }
+    });
+    const confirmedNet = confirmedAdd - confirmedDed - confirmedExp;
+    const isMixed = dayEvents.length > 1;
+    let toneClass = '';
+    if (isMixed) {
+      toneClass = 'is-mixed';
+    } else if (dayEvents.length === 1) {
+      const only = dayEvents[0][0];
+      toneClass = only === 'addition'
+        ? 'is-addition'
+        : only === 'deduction-event'
+          ? 'is-deduction'
+          : only === 'expense-event'
+            ? 'is-expense'
+            : 'is-pending';
+    }
+    const sign = hasConfirmed ? (confirmedNet < 0 ? '−' : '+') : '';
+    const amountClass = hasConfirmed
+      ? (confirmedNet < 0 ? 'is-neg' : 'is-pos')
+      : (hasPending ? 'is-pending' : '');
+    const displayAmount = hasConfirmed ? Math.abs(confirmedNet) : pendingTotal;
+    const segments = isMixed
+      ? [
+        { tone: 'addition', amount: confirmedAdd },
+        { tone: 'deduction', amount: confirmedDed },
+        { tone: 'expense', amount: confirmedExp },
+        { tone: 'pending', amount: pendingTotal }
+      ].filter((seg) => seg.amount > 0)
+      : [];
+    return {
+      dayEvents,
+      toneClass,
+      isMixed,
+      hasConfirmed,
+      hasPending,
+      confirmedAdd,
+      confirmedDed,
+      confirmedExp,
+      confirmedNet,
+      pendingTotal,
+      sign,
+      amountClass,
+      displayAmount,
+      segments
+    };
+  }
   function aggregateDayContributors(activities) {
     const byContributor = new Map();
     activities.filter((activity) => activity.activity_type === 'ADDITION').forEach((activity) => {
-      const name = activity.subject_name || 'Group member';
-      const key = activity.subject_member_id || name;
+      const memberId = activity.subject_member_id ? String(activity.subject_member_id) : '';
+      const linkedProfile = memberId ? groupProfileByMemberId.get(memberId) : null;
+      const userId = linkedProfile?.id ? String(linkedProfile.id) : '';
+      const name = activity.subject_name || linkedProfile?.full_name || 'Group member';
+      const key = userId || memberId || name;
       if (!byContributor.has(key)) {
         byContributor.set(key, {
           key,
+          userId,
+          memberId,
           name,
-          avatarUrl: activity.subject_avatar_url || '',
+          avatarUrl: linkedProfile?.avatar_url || activity.subject_avatar_url || '',
           totalAmount: 0,
+          confirmedAmount: 0,
+          pendingAmount: 0,
           count: 0,
           statuses: new Set(),
           paymentMethods: new Set(),
@@ -636,8 +719,15 @@
         });
       }
       const entry = byContributor.get(key);
-      if (!entry.avatarUrl && activity.subject_avatar_url) entry.avatarUrl = activity.subject_avatar_url;
-      entry.totalAmount += Number(activity.amount || 0);
+      if (!entry.userId && userId) entry.userId = userId;
+      if (!entry.memberId && memberId) entry.memberId = memberId;
+      if (!entry.avatarUrl && (linkedProfile?.avatar_url || activity.subject_avatar_url)) {
+        entry.avatarUrl = linkedProfile?.avatar_url || activity.subject_avatar_url;
+      }
+      const amt = Number(activity.amount || 0);
+      entry.totalAmount += amt;
+      if (activity.approval_status === 'PENDING') entry.pendingAmount += amt;
+      else entry.confirmedAmount += amt;
       entry.count += 1;
       if (activity.approval_status) entry.statuses.add(activity.approval_status);
       entry.paymentMethods.add(Ipon.normalizePaymentMethod(activity.payment_method));
@@ -661,27 +751,58 @@
     allWeeks.forEach((week, weekIndex) => {
       const row = cells.slice(weekIndex * 7, weekIndex * 7 + 7);
       week.innerHTML = row.map((cell, column) => {
-        if (!cell || cell.empty) return '<span class="day is-empty"></span>';
-        const activity = cell.activities[0];
+        if (!cell || cell.empty) return '<span class="day is-empty" aria-hidden="true"></span>';
+        const hasActivity = cell.activities.length > 0;
+        const summary = summarizeDayActivities(cell.activities);
         const contributors = aggregateDayContributors(cell.activities);
         let avatarsHtml = '';
         if (contributors.length) {
-          const shown = contributors.slice(0, 4).map((person) => Ipon.avatarMarkup(person.avatarUrl, person.name, 'day-avatar')).join('');
-          const overflow = contributors.length > 4 ? `<span class="day-avatar day-avatar-more" title="${contributors.length - 4} more contributor${contributors.length - 4 === 1 ? '' : 's'}">&bull;&bull;&bull;</span>` : '';
-          avatarsHtml = `<span class="day-avatars" aria-hidden="true">${shown}${overflow}</span>`;
+          const visibleLimit = contributors.length > 3 ? 2 : 3;
+          const shown = contributors.slice(0, visibleLimit).map((person) => {
+            const safeName = Ipon.escapeHtml(person.name);
+            const safeUid = Ipon.escapeHtml(person.userId || '');
+            const safeAvatar = Ipon.escapeHtml(person.avatarUrl || '');
+            const profileLabel = person.userId
+              ? `View ${person.name}'s profile`
+              : `${person.name} (no linked user profile)`;
+            return `<button class="day-avatar-btn" type="button" data-profile-user-id="${safeUid}" data-profile-name="${safeName}" data-profile-avatar="${safeAvatar}" title="${safeName}" aria-label="${Ipon.escapeHtml(profileLabel)}">${Ipon.avatarMarkup(person.avatarUrl, person.name, 'day-avatar')}</button>`;
+          }).join('');
+          const overflowCount = contributors.length - visibleLimit;
+          const overflow = overflowCount > 0
+            ? `<span class="day-avatar day-avatar-more" title="${overflowCount} more contributor${overflowCount === 1 ? '' : 's'}">+${overflowCount}</span>`
+            : '';
+          avatarsHtml = `<span class="day-avatars">${shown}${overflow}</span>`;
         }
         let activityHtml = '';
-        const dayEvents = activity ? dayEventStatuses(cell.activities) : [];
-        if (activity) {
+        const dayEvents = hasActivity ? summary.dayEvents : [];
+        if (hasActivity) {
           const eventsMarkup = dayEvents.map(([klass, label]) => `<span class="event ${klass}" title="${Ipon.escapeHtml(label)}" aria-label="${Ipon.escapeHtml(label)}">${eventIconMarkup(klass)}</span>`).join('');
-          const dayAmount = contributors.length ? contributors.reduce((sum, person) => sum + person.totalAmount, 0) : Number(activity.amount);
           const moreCount = !contributors.length && cell.activities.length > 1 ? `<small class="more-count">+${cell.activities.length - 1}</small>` : '';
-          activityHtml = `<span class="day-events">${eventsMarkup}</span><em>${Ipon.money(dayAmount)}</em>${avatarsHtml}${moreCount}`;
+          const segsHtml = summary.segments.length > 1
+            ? `<span class="day-segs" aria-hidden="true">${summary.segments.map((seg) => `<i class="seg-${seg.tone}" style="flex:${Math.max(1, Math.round(seg.amount))}"></i>`).join('')}</span>`
+            : '';
+          const amountMarkup = `<em class="day-amount ${summary.amountClass}">${summary.sign ? `<i>${summary.sign}</i>` : ''}${formatCalendarTileAmount(summary.displayAmount)}</em>`;
+          activityHtml = `<span class="day-events${summary.isMixed ? ' is-mixed' : ''}">${eventsMarkup}</span>${avatarsHtml}${moreCount}${amountMarkup}${segsHtml}`;
         }
         const statusSummary = dayEvents.length ? `: ${dayEvents.map(([, label]) => label).join(', ')}` : '';
-        const activityLabel = cell.activities.length ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}${statusSummary}` : ', no recorded activity';
+        const amountSummary = hasActivity
+          ? (summary.hasConfirmed
+            ? `, confirmed net ${summary.sign}${Ipon.money(summary.displayAmount)}${summary.hasPending ? `, pending ${Ipon.money(summary.pendingTotal)}` : ''}`
+            : `, pending ${Ipon.money(summary.pendingTotal)}`)
+          : '';
+        const activityLabel = cell.activities.length
+          ? `, ${cell.activities.length} recorded ${cell.activities.length === 1 ? 'activity' : 'activities'}${statusSummary}${amountSummary}`
+          : ', no recorded activity';
         const isToday = cell.day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
-        return `<button class="day ${column === 0 ? 'sunday' : ''}${isToday ? ' is-today' : ''}${contributors.length ? ' has-avatars' : ''}" type="button" data-date="${cell.date}"${isToday ? ' aria-current="date"' : ''} aria-label="${monthName} ${cell.day}${isToday ? ', today' : ''}${activityLabel}"><b>${cell.day}</b>${activityHtml}</button>`;
+        const classes = [
+          'day',
+          column === 0 ? 'sunday' : '',
+          isToday ? 'is-today' : '',
+          hasActivity ? 'has-activity' : '',
+          summary.toneClass,
+          contributors.length ? 'has-avatars' : ''
+        ].filter(Boolean).join(' ');
+        return `<div class="${classes}" role="button" tabindex="0" data-date="${cell.date}"${isToday ? ' aria-current="date"' : ''} aria-label="${Ipon.escapeHtml(`${monthName} ${cell.day}${isToday ? ', today' : ''}${activityLabel}`)}"><b>${cell.day}</b>${activityHtml}</div>`;
       }).join('');
     });
     Ipon.bindAvatarFallbacks(calendarCard);
@@ -894,10 +1015,10 @@
       }
       const profilesList = groupProfilesResult?.data || [];
       Ipon.registerMemberAvatars(profilesList);
-      const profileByMemberId = new Map(profilesList.filter((p) => p.member_id).map((p) => [p.member_id, p]));
-      const profileByName = new Map(profilesList.map((p) => [(p.full_name || '').trim().toLowerCase(), p]));
+      groupProfileByMemberId = new Map(profilesList.filter((p) => p?.member_id && p?.id).map((p) => [String(p.member_id), p]));
+      groupProfileById = new Map(profilesList.filter((p) => p?.id).map((p) => [String(p.id), p]));
       (memberResult.data || []).forEach((m) => {
-        const prof = profileByMemberId.get(m.id) || profileByName.get((m.full_name || '').trim().toLowerCase());
+        const prof = groupProfileByMemberId.get(String(m.id));
         if (prof?.avatar_url) m.avatar_url = prof.avatar_url;
         if (prof?.id) m.user_id = prof.id;
       });
@@ -1124,11 +1245,17 @@
     const others = items.filter((activity) => activity.activity_type !== 'ADDITION');
     const contributionTotal = contributors.reduce((sum, person) => sum + person.totalAmount, 0);
     dayModalTitle.textContent = Ipon.dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    dayModalSubtitle.textContent = contributors.length
-      ? `${contributors.length} contributor${contributors.length === 1 ? '' : 's'} · ${Ipon.money(contributionTotal)} total contributions`
-      : items.length
-        ? `${items.length} recorded entr${items.length === 1 ? 'y' : 'ies'}`
-        : 'No recorded contributions on this day.';
+    const summaryParts = [];
+    if (contributors.length) {
+      summaryParts.push(`${contributors.length} contributor${contributors.length === 1 ? '' : 's'} · ${Ipon.money(contributionTotal)} total contributions`);
+    }
+    if (others.length) {
+      const otherTotal = others.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      summaryParts.push(`${others.length} other entr${others.length === 1 ? 'y' : 'ies'} (−${Ipon.money(otherTotal)})`);
+    }
+    dayModalSubtitle.textContent = summaryParts.length
+      ? summaryParts.join(' · ')
+      : 'No recorded contributions on this day.';
     const contributorsHtml = contributors.length ? `
       <section class="day-modal-section">
         <h3>Contributors (${contributors.length})</h3>
@@ -1137,15 +1264,21 @@
             const entries = Array.isArray(person.entries) ? person.entries : [];
             const singleEntry = entries.length === 1 ? entries[0] : null;
             const statuses = [...person.statuses].map((s) => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
+            const isPendingOnly = person.statuses.size > 0 && [...person.statuses].every((s) => s === 'PENDING');
             const methodBadges = [...person.paymentMethods].map((pm) => Ipon.paymentMethodBadge(pm)).join('');
             const notes = person.notes.length ? `<p class="day-contributor-notes">${Ipon.escapeHtml(person.notes.join(' · '))}</p>` : '';
             const reviewNotes = person.reviewNotes.length ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(person.reviewNotes.join(' · '))}</small>` : '';
             const singleEditBtn = singleEntry ? editEntryButtonMarkup(singleEntry) : '';
             const singlePendingStrip = singleEntry ? pendingEditChipMarkup(singleEntry) : '';
+            const verifiedHtml = person.userId ? (Ipon.verifiedBadgesHtml?.(person.userId) || '') : '';
+            const avatarBtnLabel = person.userId
+              ? `View ${person.name}'s profile`
+              : `${person.name} (no linked user profile)`;
             const multiListHtml = !singleEntry && entries.length > 1 ? `
               <div class="day-entry-sublist">
                 ${entries.map((entry) => {
                   const stLabel = entry.approval_status ? (entry.approval_status.charAt(0) + entry.approval_status.slice(1).toLowerCase()) : 'Confirmed';
+                  const subPendingOnly = entry.approval_status === 'PENDING';
                   const subEdit = editEntryButtonMarkup(entry);
                   const subPending = pendingEditChipMarkup(entry);
                   return `<div class="day-entry-subrow">
@@ -1156,7 +1289,7 @@
                         ${entry.notes ? `<small class="day-entry-subrow-note">· ${Ipon.escapeHtml(entry.notes)}</small>` : ''}
                       </div>
                       <div class="day-entry-subrow-right">
-                        <strong class="day-entry-subrow-amt">+${Ipon.money(entry.amount)}</strong>
+                        <strong class="day-entry-subrow-amt${subPendingOnly ? ' is-pending' : ''}">${subPendingOnly ? '' : '+'}${Ipon.money(entry.amount)}</strong>
                         ${subEdit}
                       </div>
                     </div>
@@ -1165,14 +1298,14 @@
                 }).join('')}
               </div>` : '';
             return `<article class="day-contributor-row">
-              ${Ipon.avatarMarkup(person.avatarUrl, person.name, 'avatar-md')}
+              <button class="day-modal-avatar-btn" type="button" data-profile-user-id="${Ipon.escapeHtml(person.userId || '')}" data-profile-name="${Ipon.escapeHtml(person.name)}" data-profile-avatar="${Ipon.escapeHtml(person.avatarUrl || '')}" aria-label="${Ipon.escapeHtml(avatarBtnLabel)}" title="${Ipon.escapeHtml(person.name)}">${Ipon.avatarMarkup(person.avatarUrl, person.name, 'avatar-md')}</button>
               <div class="day-contributor-info">
-                <strong>${Ipon.escapeHtml(person.name)}${Ipon.verifiedBadgesHtml?.(person.userId || person.memberId || person.name) || ''}</strong>
+                <strong>${Ipon.escapeHtml(person.name)}${verifiedHtml}</strong>
                 <small>${person.count} contribution${person.count === 1 ? '' : 's'} · ${Ipon.escapeHtml(statuses)}</small>
                 ${singleEntry ? `<div class="day-contributor-badges">${methodBadges}</div>${notes}${reviewNotes}` : ''}
               </div>
               <div class="day-contributor-side">
-                <strong class="day-contributor-amount">+${Ipon.money(person.totalAmount)}</strong>
+                <strong class="day-contributor-amount${isPendingOnly ? ' is-pending' : ''}">${isPendingOnly ? '' : '+'}${Ipon.money(person.totalAmount)}</strong>
                 ${singleEditBtn}
               </div>
               ${singlePendingStrip ? `<div class="day-contributor-extra">${singlePendingStrip}</div>` : ''}
@@ -1187,6 +1320,7 @@
         <div class="day-contributor-list">
           ${others.map((activity) => {
             const [, label] = statusClass(activity);
+            const isPending = activity.approval_status === 'PENDING';
             const editBtn = editEntryButtonMarkup(activity);
             const pendingStrip = pendingEditChipMarkup(activity);
             return `<article class="day-contributor-row">
@@ -1199,7 +1333,7 @@
                 ${activity.review_note ? `<small class="record-reason-note is-confirmed">Review note: ${Ipon.escapeHtml(activity.review_note)}</small>` : ''}
               </div>
               <div class="day-contributor-side">
-                <strong class="day-contributor-amount is-deduction">−${Ipon.money(activity.amount)}</strong>
+                <strong class="day-contributor-amount ${isPending ? 'is-pending' : 'is-deduction'}">${isPending ? '' : '−'}${Ipon.money(activity.amount)}</strong>
                 ${editBtn}
               </div>
               ${pendingStrip ? `<div class="day-contributor-extra">${pendingStrip}</div>` : ''}
@@ -1231,6 +1365,11 @@
   const board = document.querySelector('.calendar-board') || document.querySelector('.comp-frame');
   board.addEventListener('pointermove', (event) => {
     if (dayModal?.open) return;
+    if (event.target.closest('.day-avatar-btn')) {
+      detailPanel.hidden = true;
+      activeDate = null;
+      return;
+    }
     const day = event.target.closest('.day[data-date]');
     if (!day) {
       detailPanel.hidden = true;
@@ -1244,6 +1383,11 @@
     activeDate = null;
   });
   board.addEventListener('focusin', (event) => {
+    if (event.target.closest('.day-avatar-btn')) {
+      detailPanel.hidden = true;
+      activeDate = null;
+      return;
+    }
     const day = event.target.closest('.day[data-date]');
     if (!day) return;
     const box = day.getBoundingClientRect();
@@ -1256,8 +1400,29 @@
     }
   });
   board.addEventListener('click', (event) => {
+    const avatarBtn = event.target.closest('.day-avatar-btn');
+    if (avatarBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      detailPanel.hidden = true;
+      activeDate = null;
+      Ipon.openMemberProfileDialog?.(avatarBtn.dataset.profileUserId || '', {
+        fullName: avatarBtn.dataset.profileName || '',
+        avatarUrl: avatarBtn.dataset.profileAvatar || '',
+        triggerEl: avatarBtn
+      });
+      return;
+    }
     const day = event.target.closest('.day[data-date]');
     if (!day) return;
+    openDayModal(day.dataset.date);
+  });
+  board.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.target.closest('.day-avatar-btn')) return;
+    const day = event.target.closest('.day[data-date]');
+    if (!day) return;
+    event.preventDefault();
     openDayModal(day.dataset.date);
   });
   document.getElementById('day-modal-close')?.addEventListener('click', () => { openModalDate = null; dayModal?.close(); });
@@ -2439,6 +2604,17 @@
   });
 
   dayModalBody?.addEventListener('click', (event) => {
+    const profileBtn = event.target.closest('.day-modal-avatar-btn[data-profile-user-id]');
+    if (profileBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      Ipon.openMemberProfileDialog?.(profileBtn.dataset.profileUserId || '', {
+        fullName: profileBtn.dataset.profileName || '',
+        avatarUrl: profileBtn.dataset.profileAvatar || '',
+        triggerEl: profileBtn
+      });
+      return;
+    }
     const editBtn = event.target.closest('[data-edit-record-id]');
     if (editBtn) {
       const recId = editBtn.dataset.editRecordId;

@@ -261,7 +261,7 @@ test('users can upload display pictures and calendar days show up to 4 contribut
   assert.match(core, /function openAvatarCropper\(/);
   assert.match(core, /confirmAction\(\{\s*title:\s*'Remove display picture\?'/);
   assert.match(dashboardHtml, /id="day-contributors-dialog"/);
-  assert.match(dashboardJs, /contributors\.slice\(0, 4\)/);
+  assert.match(dashboardJs, /contributors\.slice\(0, visibleLimit\)/);
   assert.match(dashboardJs, /day-avatar-more/);
   assert.match(dashboardJs, /function openDayModal\(date\)/);
   assert.match(migration, /create or replace function public\.group_member_avatar\(p_member_id uuid\)/i);
@@ -2542,7 +2542,7 @@ test('calendar view and dashboard show payment methods in hover/click details an
   }
   assert.match(core, /paymentMethodIconHtml,/);
   assert.match(dashboard, /function dayEventStatuses\(/);
-  assert.match(dashboard, /<span class="day-events">/);
+  assert.match(dashboard, /<span class="day-events\$\{summary\.isMixed \? ' is-mixed' : ''\}">/);
   assert.doesNotMatch(dashboard, /dayPaymentMethodsHtml/);
   assert.match(dashboard, /paymentMethods:\s*new Set\(\)/);
   assert.match(dashboard, /<div class="day-detail-badges">/);
@@ -8503,7 +8503,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-17/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-18/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

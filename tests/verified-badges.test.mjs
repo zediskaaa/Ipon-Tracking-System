@@ -469,7 +469,7 @@ test('My Account verified badge card routes members to Gmail support compose wit
   assert.match(read('js/settings.js'), /verifiedBadgesHtml\?\.\(profile\.user_id \|\| profile\.id\)/);
   assert.match(read('js/requests.js'), /verifiedBadgesHtml\?\.\(item\.requesterId \|\| item\.requesterName\)/);
   assert.match(read('js/reports.js'), /verifiedBadgesHtml\?\.\(row\.member_id \|\| row\.member_name\)/);
-  assert.match(read('js/dashboard.js'), /verifiedBadgesHtml\?\.\(person\.userId \|\| person\.memberId \|\| person\.name\)/);
+  assert.match(read('js/dashboard.js'), /person\.userId \? \(Ipon\.verifiedBadgesHtml\?\.\(person\.userId\) \|\| ''\) : ''/);
   assert.match(coreJs, /record-thread-msg-meta[\s\S]*?verifiedBadgesHtml\(c\.author_id \|\| authorName\)/);
 
   const { ipon } = runCoreInVm(async () => ({ data: null, error: null }));
