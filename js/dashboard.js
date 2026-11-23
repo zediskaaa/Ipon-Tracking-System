@@ -842,10 +842,22 @@
       }
     }
   }
+  let initialLoadCompleted = false;
+  let dashboardLoadPromise = null;
+  let dashboardLoadQueued = false;
   async function load() {
+    if (dashboardLoadPromise) {
+      dashboardLoadQueued = true;
+      return dashboardLoadPromise;
+    }
+    const run = (async () => {
     const start = monthIso(cursor), end = monthIso(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
     if (!state.configured || !state.profile) { renderEmptySnapshot(); return; }
     try {
+      const shouldRefreshPerms = initialLoadCompleted && typeof Ipon.refreshMyPermissions === 'function';
+      if (announcements) {
+        announcements.load().catch((err) => console.warn('Announcement load error:', err));
+      }
       const [summaryResult, calendarResult, pending, memberResult, progressResult, groupsResult, groupProfilesResult, allGoalsResult, walletResult, refreshedPerms] = await Promise.all([
         Ipon.client.rpc('get_savings_summary'),
         Ipon.client.from('v_savings_calendar').select('*').in('approval_status', ['CONFIRMED', 'PENDING']).gte('activity_date', start).lt('activity_date', end).order('activity_date'),
@@ -860,9 +872,9 @@
         )),
         Ipon.client.from('savings_goals').select('id,title,target_amount,target_date,saving_frequency,scheduled_amount,schedule_start_date,schedule_baseline_amount,created_at').eq('status', 'ACTIVE').order('created_at', { ascending: false }),
         Ipon.client.rpc('get_wallet_reconciliation'),
-        Ipon.refreshMyPermissions?.().catch(() => null),
-        announcements ? announcements.load().catch((err) => console.warn('Announcement load error:', err)) : Promise.resolve()
+        shouldRefreshPerms ? Ipon.refreshMyPermissions().catch(() => null) : Promise.resolve(null)
       ]);
+      initialLoadCompleted = true;
       const normalizedGroups = Array.isArray(groupsResult) ? groupsResult : [];
       renderGroupHeader(normalizedGroups);
       if (currentGroup) {
@@ -932,6 +944,15 @@
       }
       Ipon.toast(Ipon.friendlyError(error), 'error');
     }
+    })().finally(() => {
+      dashboardLoadPromise = null;
+      if (dashboardLoadQueued) {
+        dashboardLoadQueued = false;
+        load();
+      }
+    });
+    dashboardLoadPromise = run;
+    return run;
   }
   async function navigateTo(date) {
     cursor = new Date(date.getFullYear(), date.getMonth(), 1);

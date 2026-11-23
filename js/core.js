@@ -752,6 +752,9 @@
     });
   }
 
+  let postReadyBootQueue = [];
+  let postReadyBootTimer = null;
+
   if (document.body.dataset.page) {
     if (!document.body.classList.contains('security-page')) setLoading(true);
     window.addEventListener('pagehide', (event) => {
@@ -846,6 +849,30 @@
     'savings.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h11l-2 4 2 4H5"/></svg>',
     'requests.html': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
   };
+
+  function flushPostReadyBootTasks() {
+    clearTimeout(postReadyBootTimer);
+    postReadyBootTimer = null;
+    if (!postReadyBootQueue.length) return;
+    const tasks = postReadyBootQueue;
+    postReadyBootQueue = [];
+    tasks.forEach((task) => {
+      try { task(); } catch (_) { }
+    });
+  }
+
+  function schedulePostReadyBoot(task, fallbackMs = 1200) {
+    if (typeof task !== 'function') return;
+    const loader = document.getElementById('app-loader');
+    if (!loader || loader.hidden || document.body.classList.contains('is-ready')) {
+      try { task(); } catch (_) { }
+      return;
+    }
+    postReadyBootQueue.push(task);
+    if (!postReadyBootTimer) {
+      postReadyBootTimer = setTimeout(flushPostReadyBootTasks, fallbackMs);
+    }
+  }
 
   function setLoading(visible, label = 'Opening your records…') {
     if (loaderSafetyTimer) {
@@ -942,7 +969,10 @@
     const slowBox = document.getElementById('app-loader-slow-box');
     const slowHint = document.getElementById('app-loader-slow-hint');
     if (slowBox) slowBox.hidden = true;
-    if (!visible) document.body.classList.add('is-ready');
+    if (!visible) {
+      document.body.classList.add('is-ready');
+      flushPostReadyBootTasks();
+    }
     const labelEl = document.getElementById('loader-label');
     if (labelEl) labelEl.textContent = label;
     loader.setAttribute('aria-label', label || 'Loading');
@@ -964,6 +994,7 @@
           loader.hidden = true;
           loader.setAttribute('aria-busy', 'false');
           document.body.classList.add('is-ready');
+          flushPostReadyBootTasks();
         }
       }, 8000);
     }
@@ -9724,9 +9755,16 @@
       syncShellRoleVisibility(profile.role);
       if (options.requireAuth !== false) watchCrossTabAuth(client, profile.id);
       initNotifications(profile).catch(() => { });
-      initPresence(profile);
-      if (profile.role !== 'SUPER_ADMIN' && options.requireAuth !== false) {
-        try { window.IponMessages?.init?.(profile); } catch (_) { }
+      const startShellBackgroundServices = () => {
+        initPresence(profile);
+        if (profile.role !== 'SUPER_ADMIN' && options.requireAuth !== false) {
+          try { window.IponMessages?.init?.(profile); } catch (_) { }
+        }
+      };
+      if (options.requireAuth !== false) {
+        schedulePostReadyBoot(startShellBackgroundServices, 1200);
+      } else {
+        startShellBackgroundServices();
       }
       appInitialized = true;
       dismissStartupFailure();
@@ -9767,7 +9805,7 @@
             maybeShowRetentionReminder(profile);
           }
           maybeResumePendingJoin(profile);
-          checkRewards();
+          schedulePostReadyBoot(() => { checkRewards().catch(() => { }); }, 1500);
         };
         const runAfterPolicy = () => {
           const shownUsername = !options.skipUsernamePrompt && !setupUrl
@@ -12041,7 +12079,7 @@
     const targetTopic = `realtime:${baseTopic}`;
     const channels = typeof client.getChannels === 'function' ? client.getChannels() : [];
     const existing = Array.isArray(channels)
-      ? channels.filter((ch) => ch?.topic === targetTopic)
+      ? channels.filter((ch) => ch?.topic === targetTopic || String(ch?.topic || '').startsWith(`${targetTopic}:`))
       : [];
     if (existing.length) {
       existing.forEach((ch) => {

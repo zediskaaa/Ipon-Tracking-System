@@ -46,7 +46,16 @@
   let realtimeChannel = null;
   let realtimeReconnectTimer = null;
   let realtimeReconnectAttempt = 0;
+  let refreshTimer = null;
+  let isRefreshingRealtime = false;
+  let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, refreshProtection: false };
   let scheduleRealtimeRefresh = null;
+  let refreshConversationsInFlight = null;
+  let refreshConversationsRenderWanted = false;
+  let refreshOverviewInFlight = null;
+  let refreshOverviewRenderWanted = false;
+  const silentOpenInFlight = new Map();
+  let lastForegroundSyncAt = 0;
   let typingChannel = null;
   let typingChannelSubscribed = false;
   let myTrackedConvoId = null;
@@ -2471,38 +2480,58 @@
 
   async function refreshConversations({ render = true } = {}) {
     if (!isEligible()) return [];
-    const data = await ipon().rpc('get_conversations');
-    state.conversations = Array.isArray(data) ? data : [];
-    state.conversationsLoaded = true;
-    state.loadingConvs = false;
-    computeTotalBadgeCount();
-    const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
-    if (render && dialogOpen) {
-      renderConversationList();
-    }
-    if (dialogOpen && state.activeConvId) {
-      const activeSummary = state.conversations.find((c) => c.id === state.activeConvId);
-      if (activeSummary && activeThreadLagsBehindTimestamp(state.activeConvId, activeSummary.last_message_at)) {
-        const visibleHere = isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden';
-        openConversation(state.activeConvId, { markRead: visibleHere, forceMarkRead: visibleHere, silent: true }).catch(() => { });
+    if (render) refreshConversationsRenderWanted = true;
+    if (refreshConversationsInFlight) return refreshConversationsInFlight;
+    refreshConversationsInFlight = (async () => {
+      try {
+        const data = await ipon().rpc('get_conversations');
+        state.conversations = Array.isArray(data) ? data : [];
+        state.conversationsLoaded = true;
+        state.loadingConvs = false;
+        computeTotalBadgeCount();
+        const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
+        if (refreshConversationsRenderWanted && dialogOpen) {
+          renderConversationList();
+        }
+        if (dialogOpen && state.activeConvId) {
+          const activeSummary = state.conversations.find((c) => c.id === state.activeConvId);
+          if (activeSummary && activeThreadLagsBehindTimestamp(state.activeConvId, activeSummary.last_message_at)) {
+            const visibleHere = isThreadActivelyVisible({ ignoreFocus: true }) && document.visibilityState !== 'hidden';
+            openConversation(state.activeConvId, { markRead: visibleHere, forceMarkRead: visibleHere, silent: true }).catch(() => { });
+          }
+        }
+        return state.conversations;
+      } finally {
+        refreshConversationsInFlight = null;
+        refreshConversationsRenderWanted = false;
       }
-    }
-    return state.conversations;
+    })();
+    return refreshConversationsInFlight;
   }
 
   async function refreshOverview({ render = true } = {}) {
     if (!isEligible()) return null;
-    const data = await ipon().rpc('get_social_overview');
-    state.overviewLoaded = true;
-    if (data) {
-      state.overview = data;
-      if (data.me) meSocial = data.me;
-    }
-    computeTotalBadgeCount();
-    if (render && document.getElementById('msg-workspace-dialog')?.open && state.tab === 'friends') {
-      renderFriendsView();
-    }
-    return state.overview;
+    if (render) refreshOverviewRenderWanted = true;
+    if (refreshOverviewInFlight) return refreshOverviewInFlight;
+    refreshOverviewInFlight = (async () => {
+      try {
+        const data = await ipon().rpc('get_social_overview');
+        state.overviewLoaded = true;
+        if (data) {
+          state.overview = data;
+          if (data.me) meSocial = data.me;
+        }
+        computeTotalBadgeCount();
+        if (refreshOverviewRenderWanted && document.getElementById('msg-workspace-dialog')?.open && state.tab === 'friends') {
+          renderFriendsView();
+        }
+        return state.overview;
+      } finally {
+        refreshOverviewInFlight = null;
+        refreshOverviewRenderWanted = false;
+      }
+    })();
+    return refreshOverviewInFlight;
   }
 
   // Rendering: Conversation List & Unified Inline Search
@@ -2876,7 +2905,11 @@
       !state.threadError
     );
     const backgroundRefresh = Boolean(silent || isSameLoadedThread);
-
+    const canCoalesceSilent = Boolean(backgroundRefresh && !isSwitchingConv && !aroundMessageId && !forceMarkRead && refreshProtection !== true);
+    if (canCoalesceSilent && silentOpenInFlight.has(conversationId)) {
+      return silentOpenInFlight.get(conversationId);
+    }
+    const runOpen = async () => {
     if (state.activeConvId && isSwitchingConv) {
       stopActiveConversationMedia({ includeViewer: true });
       sendTypingBroadcast(false);
@@ -3097,6 +3130,13 @@
         renderThreadErrorState();
       }
     }
+    };
+    if (!canCoalesceSilent) return runOpen();
+    const inflight = runOpen().finally(() => {
+      if (silentOpenInFlight.get(conversationId) === inflight) silentOpenInFlight.delete(conversationId);
+    });
+    silentOpenInFlight.set(conversationId, inflight);
+    return inflight;
   }
 
   function applyThreadTheme(theme = 'paper') {
@@ -9971,9 +10011,9 @@
     if (realtimeChannel && !force) return;
     clearTimeout(realtimeReconnectTimer);
     realtimeReconnectTimer = null;
-    let refreshTimer = null;
-    let isRefreshingRealtime = false;
-    let pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, refreshProtection: false };
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+    pendingRefresh = { convs: false, thread: false, markRead: false, forceMarkRead: false, overview: false, refreshProtection: false };
 
     const flushRefresh = async () => {
       refreshTimer = null;
@@ -10022,13 +10062,17 @@
     scheduleRealtimeRefresh = scheduleRefresh;
 
     if (realtimeChannel) {
-      try { client.removeChannel(realtimeChannel)?.catch?.(() => { }); } catch { }
+      const staleChannel = realtimeChannel;
       realtimeChannel = null;
+      try { client.removeChannel(staleChannel)?.catch?.(() => { }); } catch { }
     }
     const baseRealtimeTopic = `msg-social-live:${profile.id}`;
     const createChannel = ipon().createRealtimeChannel;
-    realtimeChannel = (createChannel ? createChannel(baseRealtimeTopic, undefined, client) : client.channel(baseRealtimeTopic))
+    const ch = (createChannel ? createChannel(baseRealtimeTopic, undefined, client) : client.channel(baseRealtimeTopic));
+    realtimeChannel = ch;
+    ch
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        if (ch !== realtimeChannel) return;
         const row = payload?.new || payload?.old || {};
         const cId = row.conversation_id;
         const isForActive = Boolean(cId && cId === state.activeConvId);
@@ -10064,6 +10108,7 @@
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (payload) => {
+        if (ch !== realtimeChannel) return;
         const mId = payload?.new?.message_id || payload?.old?.message_id;
         const dialogOpen = Boolean(document.getElementById('msg-workspace-dialog')?.open);
         if (!dialogOpen || !state.activeConvId) return;
@@ -10071,6 +10116,7 @@
         if (inActive) scheduleRefresh({ convs: false, thread: true, markRead: false });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_receipts' }, (payload) => {
+        if (ch !== realtimeChannel) return;
         const row = payload?.new || payload?.old || {};
         // Ignore our own read/delivered receipts so marking read never triggers a self-refresh loop.
         if (row.user_id === profile.id) return;
@@ -10162,6 +10208,7 @@
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, (payload) => {
+        if (ch !== realtimeChannel) return;
         const row = payload?.new || payload?.old || {};
         const cId = row.id;
         const curConv = state.activeThread?.conversation;
@@ -10206,6 +10253,7 @@
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${profile.id}` }, (payload) => {
+        if (ch !== realtimeChannel) return;
         const row = payload?.new || payload?.old || {};
         const cId = row.conversation_id;
         // If current user was removed or conversation was deleted for everyone, close active thread & refresh immediately
@@ -10245,15 +10293,19 @@
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
+        if (ch !== realtimeChannel) return;
         scheduleRefresh({ overview: true });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+        if (ch !== realtimeChannel) return;
         scheduleRefresh({ overview: true });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocker_id=eq.${profile.id}` }, () => {
+        if (ch !== realtimeChannel) return;
         scheduleRefresh({ overview: true, thread: Boolean(state.activeConvId), markRead: false });
       })
       .subscribe((status) => {
+        if (ch !== realtimeChannel) return;
         if (status === 'SUBSCRIBED') {
           const wasReconnecting = realtimeReconnectAttempt > 0;
           realtimeReconnectAttempt = 0;
@@ -10262,17 +10314,17 @@
               convs: true,
               thread: Boolean(state.activeConvId),
               markRead: isThreadActivelyVisible(),
-              immediate: true
+              immediate: false
             });
           }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (navigator.onLine === false) return;
-          const delay = Math.min(12000, 1200 * Math.pow(2, realtimeReconnectAttempt));
+          if (navigator.onLine === false || document.visibilityState === 'hidden') return;
+          const delay = Math.min(30000, 2000 * Math.pow(2, realtimeReconnectAttempt));
           realtimeReconnectAttempt = Math.min(realtimeReconnectAttempt + 1, 5);
           clearTimeout(realtimeReconnectTimer);
           realtimeReconnectTimer = setTimeout(() => {
             realtimeReconnectTimer = null;
-            if (!initializedProfile) return;
+            if (!initializedProfile || ch !== realtimeChannel || document.visibilityState === 'hidden') return;
             subscribeRealtime(initializedProfile, { force: true });
           }, delay);
         }
@@ -10342,9 +10394,13 @@
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { })
     ]);
 
-    // Instant delivery receipt sync on foreground focus
-    const syncForegroundReceipts = () => {
-      if (initializedProfile && (!realtimeChannel || (realtimeChannel.state && realtimeChannel.state !== 'joined' && realtimeChannel.state !== 'joining'))) {
+    // Instant delivery receipt sync on foreground focus (throttled to avoid multi-event bursts)
+    const syncForegroundReceipts = ({ force = false } = {}) => {
+      const nowMs = Date.now();
+      if (!force && nowMs - lastForegroundSyncAt < 2500) return;
+      lastForegroundSyncAt = nowMs;
+      const chState = realtimeChannel?.state;
+      if (initializedProfile && (!realtimeChannel || chState === 'closed' || chState === 'errored')) {
         subscribeRealtime(initializedProfile, { force: true });
       }
       ipon().rpc('mark_messages_delivered', { p_conversation_id: null }).catch(() => { });
@@ -10355,8 +10411,6 @@
         openConversation(state.activeConvId, { markRead: true, silent: true }).catch(() => { });
       }
     };
-    window.addEventListener('online', () => { syncForegroundReceipts(); });
-    document.addEventListener('resume', () => { syncForegroundReceipts(); });
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         stopActiveConversationMedia({ includeViewer: true });
@@ -10406,7 +10460,9 @@
     if (!lifecycleListenersBound) {
       lifecycleListenersBound = true;
       document.addEventListener('visibilitychange', onVisibilityChange);
+      document.addEventListener('resume', () => { syncForegroundReceipts(); });
       if (typeof window.addEventListener === 'function') {
+        window.addEventListener('online', () => { syncForegroundReceipts({ force: true }); });
         window.addEventListener('pagehide', () => { stopActiveConversationMedia({ includeViewer: true }); });
         window.addEventListener('focus', onWindowFocus);
         window.addEventListener('blur', onWindowBlur);

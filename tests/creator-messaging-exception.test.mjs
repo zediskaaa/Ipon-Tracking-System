@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const migration = readFileSync('database/migrations/20261122_171_creator_messaging_exception.sql', 'utf8');
 const retentionMigration = readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
+const perfMigration = readFileSync('database/migrations/20261123_191_optimize_chat_rpcs_performance.sql', 'utf8');
 const schema = readFileSync('database/schema.sql', 'utf8');
 const messages = readFileSync('js/messages.js', 'utf8');
 
@@ -38,12 +39,16 @@ test('creator direct chats bypass friends-only at each server gate while other u
 
 test('chat discovery and UI expose messaging but hide block controls for the creator', () => {
   for (const name of ['get_social_user_profile', 'get_social_overview', 'get_conversations']) {
-    assert.equal(definition(schema, name), definition(name === 'get_social_user_profile' ? retentionMigration : migration, name), `${name} must match the cumulative schema`);
+    const source = name === 'get_social_user_profile'
+      ? retentionMigration
+      : (name === 'get_conversations' ? perfMigration : migration);
+    assert.equal(definition(schema, name), definition(source, name), `${name} must match the cumulative schema`);
   }
   assert.match(definition(migration, 'get_social_user_profile'), /'can_block', not public\.is_creator_messaging_account\(p_target_id\)/);
   assert.match(definition(migration, 'search_social_users'), /'can_message',[\s\S]*?is_creator_messaging_account\(v_uid\)/);
   assert.match(definition(schema, 'search_social_users'), /'can_message',[\s\S]*?is_creator_messaging_account\(v_uid\)/);
-  assert.match(definition(migration, 'get_conversations'), /'friends_only_locked', false/);
+  assert.match(definition(perfMigration, 'get_conversations'), /'friends_only_locked', false/);
+  assert.match(definition(perfMigration, 'get_conversations'), /'can_block', not \(v_creator_id is not null/);
   assert.match(definition(migration, 'get_conversation_messages'), /'can_block', false, 'anonymous_enabled', true/);
   assert.match(definition(schema, 'get_conversation_messages'), /'can_block', false, 'anonymous_enabled', true/);
   assert.match(messages, /conv\.anonymous_enabled \|\| conv\.can_block === false/);
