@@ -2655,7 +2655,7 @@
     await Ipon.rpc('cleanup_inactive_verified_badges').catch(() => {});
     const safeQuery = (query) => (Ipon.withTimeout ? Ipon.withTimeout(query) : Promise.resolve(query)).catch((err) => ({ data: [], error: err }));
     const [profileResult, groupResult, membershipResult, featureRequestResult, bugReportResult, activityResult, storageResult, effectsResult, effectTrialReqResult, scheduledAwardsResult] = await Promise.all([
-      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at,equipped_profile_effect').order('created_at', { ascending: false })),
+      safeQuery(Ipon.client.from('profiles').select('id,full_name,first_name,middle_name,last_name,email,role,status,group_id,avatar_url,created_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,equipped_profile_effect').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('groups').select('id,name,owner_id,status,workspace_mode,created_at').order('created_at', { ascending: false })),
       safeQuery(Ipon.client.from('group_memberships').select('group_id,user_id,role,status')),
       safeQuery(Ipon.client.from('feature_requests').select('id,requester_id,allow_credit,title,details,status,reviewed_at,reviewed_by,release_version,created_at').order('created_at', { ascending: false }).limit(200)),

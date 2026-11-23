@@ -5,6 +5,7 @@ import fs from 'node:fs';
 const sql = fs.readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
 const badgeFix = fs.readFileSync('database/migrations/20261123_188_protect_active_badges_during_cleanup.sql', 'utf8');
 const finalGuard = fs.readFileSync('database/migrations/20261123_189_recheck_inactive_account_purge.sql', 'utf8');
+const retiredHeartbeat = fs.readFileSync('database/migrations/20261123_190_retire_last_seen_writes.sql', 'utf8');
 const fn = (name) => sql.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\$\\$;`, 'i'))?.[0] || '';
 
 test('retention uses refreshed sessions and recorded account activity with null-safe precedence', () => {
@@ -74,4 +75,13 @@ test('web and Android updates defer reloads during active work', () => {
   assert.match(core, /if \(!force && hasPendingUpdateWork\(\)\) return \{ status: 'deferred' \};/);
   assert.match(core, /#msg-upload-queue:not\(\[hidden\]\)/);
   assert.doesNotMatch(sw, /skipWaiting\(\)/);
+});
+
+test('legacy heartbeat RPC remains callable without writing stale presence or clearing warnings', () => {
+  const body = retiredHeartbeat.match(/create or replace function public\.touch_user_last_seen\(\)[\s\S]*?\$\$;/)?.[0] || '';
+  assert.match(body, /returns void[\s\S]*?begin\s+return;\s+end;/);
+  assert.doesNotMatch(body, /update public\.profiles|last_seen_at\s*=/i);
+  assert.match(retiredHeartbeat, /drop trigger if exists profiles_clear_inactivity_warning/);
+  assert.match(retiredHeartbeat, /drop function if exists public\.clear_inactivity_warning_on_activity/);
+  assert.doesNotMatch(retiredHeartbeat, /drop column/i);
 });

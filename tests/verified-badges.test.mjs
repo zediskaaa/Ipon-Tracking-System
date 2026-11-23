@@ -298,7 +298,7 @@ test('Super Admin Badges tab, messages integration, and CSS contracts are comple
   assert.match(css, /\.msg-conv-bottom-meta\s*\{/);
 });
 
-test('2-month inactivity rule, Thank-you unlock, and verified-since hover tooltip work across SQL and runtime', () => {
+test('2-month inactivity rule, Thank-you unlock, and verified-since hover tooltip work across SQL and runtime', async () => {
   const mig112 = read('database/migrations/20261118_112_verified_badge_inactivity_and_since.sql');
   const mig113 = read('database/migrations/20261118_113_badge_unlock_on_thankyou.sql');
   assert.match(mig112, /effective_verified_badge_for_user\(/i);
@@ -313,7 +313,14 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
   assert.match(mig113, /get_active_verified_badges\(/i);
   assert.match(mig113, /get_social_user_profile\(/i);
 
-  const { ipon, appendedNodes, docListeners } = runCoreInVm(async () => ({ data: null, error: null }));
+  const { ipon, appendedNodes, docListeners } = runCoreInVm(async (name) => ({
+    data: name === 'get_active_verified_badges' ? [
+      { user_id: 'u-active-blue', verified_badge: 'BLUE', granted_at: '2026-10-05T08:00:00Z' },
+      { user_id: 'u-active-stale', verified_badge: 'BLUE', granted_at: new Date(Date.now() - 90 * 86400000).toISOString() }
+    ] : null,
+    error: null
+  }));
+  await ipon.refreshVerifiedBadgesCache({ force: true });
 
   const threeMonthsAgo = new Date(Date.now() - 90 * 86400000).toISOString();
   const recent = new Date(Date.now() - 2 * 86400000).toISOString();
@@ -327,6 +334,15 @@ test('2-month inactivity rule, Thank-you unlock, and verified-since hover toolti
     verified_badge_acknowledged_at: threeMonthsAgo,
     last_seen_at: threeMonthsAgo
   }), 'NONE');
+
+  // The server has current session evidence; a stale legacy last_seen_at cannot hide its active badge.
+  assert.equal(ipon.effectiveVerifiedBadgeTier({
+    id: 'u-active-stale',
+    verified_badge_tier: 'BLUE',
+    verified_badge_granted_at: threeMonthsAgo,
+    verified_badge_acknowledged_at: threeMonthsAgo,
+    last_seen_at: threeMonthsAgo
+  }), 'BLUE');
 
   // Protected Creator Green stays active even if dates are old
   assert.equal(ipon.effectiveVerifiedBadgeTier({

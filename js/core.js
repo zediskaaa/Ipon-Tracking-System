@@ -3152,16 +3152,6 @@
 
   const SCALLOP_SEAL_PATH = 'M8.67 3.96Q8.76 0.76 12.00 0.55Q15.24 0.76 15.33 3.96Q17.66 1.76 20.10 3.90Q22.24 6.34 20.04 8.67Q23.24 8.76 23.45 12.00Q23.24 15.24 20.04 15.33Q22.24 17.66 20.10 20.10Q17.66 22.24 15.33 20.04Q15.24 23.24 12.00 23.45Q8.76 23.24 8.67 20.04Q6.34 22.24 3.90 20.10Q1.76 17.66 3.96 15.33Q0.76 15.24 0.55 12.00Q0.76 8.76 3.96 8.67Q1.76 6.34 3.90 3.90Q6.34 1.76 8.67 3.96Z';
 
-  function isTwoMonthsInactive(lastActiveIso, grantedAtIso) {
-    const t1 = lastActiveIso ? Date.parse(lastActiveIso) : NaN;
-    const t2 = grantedAtIso ? Date.parse(grantedAtIso) : NaN;
-    const latest = Math.max(Number.isNaN(t1) ? -Infinity : t1, Number.isNaN(t2) ? -Infinity : t2);
-    if (!Number.isFinite(latest)) return false;
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 2);
-    return latest <= cutoff.getTime();
-  }
-
   function resolveVerifiedBadgeInfo(userOrId, explicitTier = '', opts = {}) {
     const uid = resolveBadgeUserId(userOrId);
     const cached = uid ? VERIFIED_BADGE_MAP.get(String(uid)) : null;
@@ -3191,11 +3181,9 @@
         return { tier: 'NONE', granted_at: null, expires_at: null };
       }
     }
-    if (tier === 'BLUE' && !expiresAt && typeof userOrId === 'object' && userOrId && (userOrId.last_seen_at || userOrId.verified_badge_granted_at)) {
-      if (isTwoMonthsInactive(userOrId.last_seen_at, userOrId.verified_badge_granted_at || userOrId.created_at)) {
-        if (uid) VERIFIED_BADGE_MAP.delete(String(uid));
-        return { tier: 'NONE', granted_at: null, expires_at: null };
-      }
+    if (tier === 'BLUE' && !expiresAt && verifiedBadgesLoadedAt && uid && !cached
+      && !opts?.allowPendingAck && !userOrId?.verified_badge) {
+      return { tier: 'NONE', granted_at: null, expires_at: null };
     }
     return { tier, granted_at: grantedAt, expires_at: expiresAt, uid };
   }
@@ -3718,7 +3706,7 @@
       if (refreshOwnProfile && currentProfile?.id) {
         const { data: freshProfile } = await withTimeout(
           client.from('profiles')
-            .select('verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,last_seen_at')
+            .select('verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at')
             .eq('id', currentProfile.id)
             .single(),
           5000
@@ -5757,7 +5745,7 @@
     dialog?.setAttribute('aria-busy', 'true');
     try {
       const [profileRes, _creatorId, appearance] = await Promise.all([
-        client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,last_seen_at,social_links').eq('id', currentProfile.id).single(),
+        client.from('profiles').select('first_name,middle_name,last_name,full_name,email,contact_number,notifications_enabled,avatar_url,member_id,payout_channel,payout_account_number,payout_account_name,name_setup_required,verified_badge_tier,verified_badge_granted_at,verified_badge_expires_at,verified_badge_acknowledged_at,verified_badge_message,username,bio,social_links').eq('id', currentProfile.id).single(),
         resolveCreatorSocialId().catch(() => null),
         rpc('get_profile_card_appearance', { p_target_id: currentProfile.id }).catch(() => null),
         refreshProfileEffectsState({ checkModal: false }).catch(() => null)
@@ -5789,7 +5777,6 @@
         verified_badge_message: data.verified_badge_message,
         username: data.username ?? currentProfile.username,
         bio: data.bio ?? currentProfile.bio,
-        last_seen_at: data.last_seen_at,
         social_links: sanitizeSocialLinks(data.social_links)
       });
       hydrateAccountDialogFields(data, payoutSource, { preserveDirty });
@@ -9623,7 +9610,7 @@
         : Promise.resolve(false);
 
       const fetchProfile = () => client.from('profiles')
-        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,last_seen_at,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
+        .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,chat_privacy,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
         .eq('id', session.user.id)
         .single();
       const [needsMfa, profileResult] = await Promise.all([
