@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const sql = fs.readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
 const badgeFix = fs.readFileSync('database/migrations/20261123_188_protect_active_badges_during_cleanup.sql', 'utf8');
+const finalGuard = fs.readFileSync('database/migrations/20261123_189_recheck_inactive_account_purge.sql', 'utf8');
 const fn = (name) => sql.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\$\\$;`, 'i'))?.[0] || '';
 
 test('retention uses refreshed sessions and recorded account activity with null-safe precedence', () => {
@@ -37,6 +38,19 @@ test('recent login, recent activity, old activity, absent timestamps and inactiv
   assert.ok(activity(now - 240 * day) <= warnCutoff, 'old activity remains eligible for warning');
   assert.equal(activity(null, undefined), -Infinity, 'missing timestamps are not treated as recent');
   assert.ok(activity(now - 240 * day) <= purgeCutoff, 'a warned user without recent activity remains eligible after grace');
+});
+
+test('messages, contributions, and active savings clear stale warnings and block last-second purge', () => {
+  const reset = finalGuard.split('select coalesce(')[0];
+  assert.match(reset, /c\.submitted_by = p\.id/);
+  assert.match(reset, /m\.sender_id = p\.id/);
+  assert.match(reset, /group_last_savings_activity_at\(p\.group_id\) > p\.inactivity_warned_at/);
+  const purge = finalGuard.match(/create or replace function public\.purge_inactive_user_data\([\s\S]*?\$\$;/)?.[0] || '';
+  assert.match(purge, /inactivity_warned_at is null[\s\S]*?interval '7 days'/);
+  assert.match(purge, /latest_retention_activity_at\(p_user_id\)/);
+  assert.match(purge, /m\.sender_id = p_user_id/);
+  assert.match(purge, /group_last_savings_activity_at\(v_prof\.group_id\)/);
+  assert.ok(fs.readFileSync('database/schema.sql', 'utf8').replaceAll('\r\n', '\n').includes(purge));
 });
 
 test('queue-only maintenance is authenticated and keeps failed deletions retryable', () => {
