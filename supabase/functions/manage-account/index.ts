@@ -8,6 +8,7 @@ const SYSTEM_NAME = 'myIPON';
 const EMAIL_LOGO_URL = 'https://my-ipon.vercel.app/assets/icon-192.png?v=2';
 const APP_LOGIN_URL = 'https://my-ipon.vercel.app/login.html';
 const R2_PATH_MARKER = '/r2/';
+const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 let r2Client: AwsClient | null = null;
 const CLERK_ISSUER = 'https://solid-gannet-2021.clerk.accounts.dev';
 const clerkJwks = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
@@ -723,7 +724,8 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
     .select('id,bucket_id,object_path')
     .order('queued_at', { ascending: true })
     .limit(500);
-  if (error || !rows?.length) return { drained: 0 };
+  if (error) throw error;
+  if (!rows?.length) return { drained: 0, failed: 0, referenced: 0, failure_stages: {}, failure_codes: {} };
 
   const byBucket = new Map<string, Array<{ id: string; object_path: string }>>();
   for (const row of rows as Array<{ id: string; bucket_id: string; object_path: string }>) {
@@ -733,17 +735,43 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
   }
 
   let drained = 0;
+  let failed = 0;
+  let referenced = 0;
+  const failureStages: Record<string, number> = {};
+  const failureCodes: Record<string, number> = {};
   for (const [bucket, items] of byBucket.entries()) {
     for (let i = 0; i < items.length; i += 100) {
       const slice = items.slice(i, i + 100);
+      let stage = 'reference_lookup';
       try {
-        await removePrivateObjects(admin, bucket, slice.map((x) => x.object_path));
-        await admin.from('pending_storage_deletions').delete().in('id', slice.map((x) => x.id));
-        drained += slice.length;
-      } catch { /* retry on the next maintenance sweep */ }
+        const safe = [];
+        for (const item of slice) {
+          if (bucket === CHAT_ATTACHMENTS_BUCKET) {
+            const { data: links, error: linkError } = await admin.from('message_attachments')
+              .select('id').eq('bucket_id', bucket).eq('storage_path', item.object_path).limit(1);
+            if (linkError) throw linkError;
+            if (links?.length) { referenced += 1; continue; }
+          }
+          safe.push(item);
+        }
+        if (!safe.length) continue;
+        stage = 'object_removal';
+        await removePrivateObjects(admin, bucket, safe.map((x) => x.object_path));
+        stage = 'queue_delete';
+        const { data: removedRows, error: deleteError } = await admin.from('pending_storage_deletions')
+          .delete().in('id', safe.map((x) => x.id)).select('id');
+        if (deleteError) throw deleteError;
+        drained += removedRows?.length || 0;
+      } catch (err) {
+        failed += slice.length;
+        failureStages[stage] = (failureStages[stage] || 0) + slice.length;
+        const code = String((err as { code?: string })?.code || 'UNKNOWN');
+        if (/^[A-Z0-9_]+$/.test(code)) failureCodes[code] = (failureCodes[code] || 0) + slice.length;
+        /* keep rows for the next maintenance sweep */
+      }
     }
   }
-  return { drained };
+  return { drained, failed, referenced, failure_stages: failureStages, failure_codes: failureCodes };
 }
 
 async function runRetentionSweep(admin: ReturnType<typeof createClient>, { runSqlCleanup = false } = {}) {
@@ -2289,6 +2317,10 @@ Deno.serve(async (request) => {
     if (!expectedSecret || !timingSafeSecretEqual(providedSecret, expectedSecret)) {
       return json({ error: 'Unauthorized maintenance invocation.' }, 401);
     }
+    if (body.queue_only === true) {
+      const result = await drainPendingStorageDeletions(admin);
+      return json({ success: result.failed === 0, ...result }, result.failed ? 500 : 200);
+    }
     const result = await runRetentionSweep(admin, { runSqlCleanup: Boolean(body.run_sql) });
     return json({ success: result.errors.length === 0, ...result }, result.errors.length ? 500 : 200);
   }
@@ -2578,7 +2610,6 @@ Deno.serve(async (request) => {
     }
   }
 
-  const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
   const ALLOWED_CHAT_EXT_RE = /\.(jpg|jpeg|png|webp|gif|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp|md|mp3|wav|ogg|m4a|webm|aac|mp4|mov|zip)$/i;
 
   if (body.action === 'chat-upload-urls') {

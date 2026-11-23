@@ -28,7 +28,6 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (IS_LOCAL_DEV ? Promise.resolve() : caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)))
-      .then(() => self.skipWaiting())
   );
 });
 

@@ -683,6 +683,18 @@
       setTheme(event.newValue || 'light', { persist: false });
     }
   });
+  function hasPendingUpdateWork() {
+    if (document.querySelector('dialog[open], .is-busy, [aria-busy="true"], #msg-upload-queue:not([hidden]), #msg-voice-recording:not([hidden])')) return true;
+    if (document.getElementById('msg-composer-wrap')?.getClientRects().length) return true;
+    if ([...document.querySelectorAll('input[type="file"]')].some((input) => input.files?.length)) return true;
+    if (document.activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return true;
+    return [...document.querySelectorAll('form input, form textarea, form select')].some((input) => {
+      if (input.type === 'hidden' || input.type === 'file' || input.disabled) return false;
+      if (input.type === 'checkbox' || input.type === 'radio') return input.checked !== input.defaultChecked;
+      return input.value !== input.defaultValue;
+    });
+  }
+
   const isLocalDevHost = window.location.protocol !== 'https:'
     && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
   if (!window.Capacitor && 'serviceWorker' in navigator && isLocalDevHost) {
@@ -707,7 +719,7 @@
     let swReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController || swReloading) return;
-      if (document.querySelector('dialog[open]')) return;
+      if (hasPendingUpdateWork()) return;
       swReloading = true;
       try { showAppUpdatingOverlay({ title: 'Updating the app…', message: 'Applying the latest version…', progress: 100 }); } catch (_) { }
       setTimeout(() => window.location.reload(), 260);
@@ -12627,7 +12639,7 @@
         initialWebShellTag = liveTag;
         return false;
       }
-      if (liveTag !== initialWebShellTag && !document.querySelector?.('dialog[open]')) {
+      if (liveTag !== initialWebShellTag && !hasPendingUpdateWork()) {
         webShellReloading = true;
         showAppUpdatingOverlay({
           title: 'Updating the app…',

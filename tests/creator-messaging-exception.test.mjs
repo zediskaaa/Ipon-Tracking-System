@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const migration = readFileSync('database/migrations/20261122_171_creator_messaging_exception.sql', 'utf8');
+const retentionMigration = readFileSync('database/migrations/20261123_187_session_and_account_activity_retention.sql', 'utf8');
 const schema = readFileSync('database/schema.sql', 'utf8');
 const messages = readFileSync('js/messages.js', 'utf8');
 
@@ -37,7 +38,7 @@ test('creator direct chats bypass friends-only at each server gate while other u
 
 test('chat discovery and UI expose messaging but hide block controls for the creator', () => {
   for (const name of ['get_social_user_profile', 'get_social_overview', 'get_conversations']) {
-    assert.equal(definition(schema, name), definition(migration, name), `${name} must match the cumulative schema`);
+    assert.equal(definition(schema, name), definition(name === 'get_social_user_profile' ? retentionMigration : migration, name), `${name} must match the cumulative schema`);
   }
   assert.match(definition(migration, 'get_social_user_profile'), /'can_block', not public\.is_creator_messaging_account\(p_target_id\)/);
   assert.match(definition(migration, 'search_social_users'), /'can_message',[\s\S]*?is_creator_messaging_account\(v_uid\)/);
