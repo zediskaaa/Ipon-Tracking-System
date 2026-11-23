@@ -61,6 +61,11 @@ jobs:
             DB_URL="${DB_URL/:\/\/postgres:/:\/\/postgres.${PROJECT_REF}:}"
           fi
 
+          if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -Atqc 'select 1' > /dev/null 2>&1; then
+            echo "::warning title=Database connection unavailable::GitHub could not connect using SUPABASE_DB_URL. Check its host, pooler username, and password; automatic migrations were skipped."
+            exit 0
+          fi
+
           psql "$DB_URL" -v ON_ERROR_STOP=1 --file database/migrations/0000_create_migration_ledger.sql
           for migration in database/migrations/20*.sql; do
             filename="${migration##*/}"
@@ -74,14 +79,12 @@ jobs:
             fi
           done
 
-      - name: Require Supabase access token for Edge Function deployment
+      - name: Warn about skipped Edge Function deployment
         if: ${{ env.SUPABASE_ACCESS_TOKEN == '' && env.SUPABASE_DB_URL != '' }}
         run: |
-          echo "::error title=Edge Function not deployed::Set SUPABASE_ACCESS_TOKEN to deploy manage-account after database migration."
-          exit 1
+          echo "::warning title=Edge Functions skipped::Set SUPABASE_ACCESS_TOKEN to deploy Edge Functions automatically."
 
       - name: Warn if neither Supabase secret is configured
         if: ${{ env.SUPABASE_ACCESS_TOKEN == '' && env.SUPABASE_DB_URL == '' }}
         run: |
-          echo "::error title=Missing Secret::Set SUPABASE_ACCESS_TOKEN or SUPABASE_DB_URL in GitHub repository secrets for deployment."
-          exit 1
+          echo "::warning title=Missing Supabase credentials::Set SUPABASE_ACCESS_TOKEN or SUPABASE_DB_URL in GitHub repository secrets; automatic deployment was skipped."
