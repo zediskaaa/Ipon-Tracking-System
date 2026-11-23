@@ -97,6 +97,20 @@
   let pendingGroupAvatarUrl = null;
   let pendingGroupClearAvatar = false;
   const heroMoney = (value) => Ipon.money(value);
+  function renderHeroMoneyEl(el, value, { smallTag = 'i' } = {}) {
+    if (!el) return;
+    const raw = Number(value);
+    const safe = Number.isFinite(raw) ? raw : 0;
+    const negative = safe < 0;
+    const abs = Math.abs(safe);
+    const [whole, cents] = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.');
+    const digitCount = whole.replace(/,/g, '').length;
+    const lenTier = digitCount <= 4 ? 'sm' : digitCount <= 7 ? 'md' : digitCount <= 10 ? 'lg' : 'xl';
+    if (el.dataset) el.dataset.valLen = lenTier;
+    const tag = smallTag === 'small' ? 'small' : 'i';
+    const prefix = negative ? '−₱' : '₱';
+    el.innerHTML = `<${tag}>${prefix}</${tag}><span class="hero-val-num">${whole}</span><span class="hero-val-cents">.${cents}</span>`;
+  }
   const groupAvatarEl = document.getElementById('dashboard-group-avatar');
   const groupNameEl = document.getElementById('dashboard-group-name');
   const groupModeEl = document.getElementById('dashboard-group-mode');
@@ -1005,7 +1019,7 @@
   }
   function renderEmptySnapshot() {
     const total = document.querySelector('.tracked-total');
-    total.textContent = heroMoney(0);
+    renderHeroMoneyEl(total, 0, { smallTag: 'i' });
     total.classList.add('is-zero');
     renderSummaryBreakdown({
       summary: {
@@ -1037,12 +1051,12 @@
       return;
     }
     walletStrip.hidden = false;
-    if (walletCashEl) walletCashEl.textContent = Ipon.money(wallet.physical_cash_balance || 0);
-    if (walletDigitalEl) walletDigitalEl.textContent = Ipon.money(wallet.digital_wallet_balance || 0);
+    renderHeroMoneyEl(walletCashEl, wallet.physical_cash_balance || 0, { smallTag: 'small' });
+    renderHeroMoneyEl(walletDigitalEl, wallet.digital_wallet_balance || 0, { smallTag: 'small' });
     const otherAndUntagged = Number(wallet.other_balance || 0) + Number(wallet.untagged_balance || 0);
     if (walletUntaggedWrap && walletUntaggedEl) {
       walletUntaggedWrap.hidden = !wallet.has_untagged && otherAndUntagged === 0;
-      walletUntaggedEl.textContent = Ipon.money(otherAndUntagged);
+      renderHeroMoneyEl(walletUntaggedEl, otherAndUntagged, { smallTag: 'small' });
     }
   }
   function updateDashboardGoalProgress(trackedSavings) {
@@ -1173,7 +1187,7 @@
         currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);
         syncGroupHub();
       }
-      const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); total.textContent = heroMoney(summary.tracked_savings); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
+      const summary = summaryResult.data || {}; const total = document.querySelector('.tracked-total'); renderHeroMoneyEl(total, summary.tracked_savings, { smallTag: 'i' }); total.classList.toggle('is-zero', Number(summary.tracked_savings || 0) === 0);
       if (cycleBadge) {
         cycleBadge.hidden = !summary.cycle_start_date;
         if (summary.cycle_start_date) {
@@ -1246,7 +1260,7 @@
     label.textContent = 'Synthetic sample amounts';
     document.querySelector('.summary-hero').append(label);
     const total = document.querySelector('.tracked-total');
-    total.textContent = heroMoney(fixture.summary.tracked_savings);
+    renderHeroMoneyEl(total, fixture.summary.tracked_savings, { smallTag: 'i' });
     const fixtureActivities = Array.isArray(fixture.activities) ? fixture.activities : [];
     const fixturePending = Array.isArray(fixture.pending) ? fixture.pending : [];
     renderSummaryBreakdown({

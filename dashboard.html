@@ -17,7 +17,7 @@
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css?v=20261123-22">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261123-04">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261123-05">
   <link rel="stylesheet" href="css/tutorial.css?v=20261123-01">
   <script src="js/config.js?v=20261123-01"></script>
 </head>
@@ -191,31 +191,38 @@
             </div>
           </div>
         </section>
-        <div class="summary-hero">
+        <div class="summary-hero" aria-label="Tracked savings">
+          <div class="summary-hero-top">
+            <h1 class="tracked-label" data-region="tracked-label" id="tracked-heading">Tracked savings<button class="info-tip-btn" type="button" data-info-tip="Total of your confirmed cash on hand, e-wallets, and bank savings (confirmed additions minus deductions and expenses). Pending items are not included yet." aria-label="About tracked savings" aria-expanded="false">i</button></h1>
+          </div>
           <div class="summary-hero-body">
             <div class="summary-hero-left">
-              <h1 class="tracked-label" data-region="tracked-label" id="tracked-heading">Tracked savings<button class="info-tip-btn" type="button" data-info-tip="Your group's real total savings right now (confirmed contributions minus deductions and expenses). Pending items are not included yet." aria-label="About tracked savings" aria-expanded="false">i</button></h1>
-              <p class="tracked-total" data-region="tracked-total">—</p>
+              <p class="tracked-total" data-region="tracked-total" data-no-cents-format="1">—</p>
               <small class="cycle-badge-note" id="dashboard-cycle-badge" hidden></small>
             </div>
-            <button class="record-entry-action" id="dashboard-record-entry" type="button">+ Record entry</button>
+            <button class="record-entry-action" id="dashboard-record-entry" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Record entry</span></button>
           </div>
           <div class="dashboard-wallet-strip" id="dashboard-wallet-strip" hidden>
             <div class="dashboard-wallet-pills">
               <div class="dashboard-wallet-pill is-cash">
+                <span class="wallet-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2.5"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 12h.01M17.5 12h.01"/></svg></span>
                 <span class="pm-badge pm-cash"><i class="pm-dot" aria-hidden="true"></i>Cash on hand</span>
-                <strong id="dashboard-wallet-cash">₱0.00</strong>
+                <strong id="dashboard-wallet-cash" data-no-cents-format="1">₱0.00</strong>
+                <svg class="wallet-pill-wm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2.5"/><circle cx="12" cy="12" r="2.5"/></svg>
               </div>
               <div class="dashboard-wallet-pill is-digital">
+                <span class="wallet-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h3"/></svg></span>
                 <span class="pm-badge pm-gcash"><i class="pm-dot" aria-hidden="true"></i>E-wallets &amp; bank</span>
-                <strong id="dashboard-wallet-digital">₱0.00</strong>
+                <strong id="dashboard-wallet-digital" data-no-cents-format="1">₱0.00</strong>
+                <svg class="wallet-pill-wm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h3"/></svg>
               </div>
               <div class="dashboard-wallet-pill is-untagged" id="dashboard-wallet-untagged-wrap" hidden>
+                <span class="wallet-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l2.5 1.5"/></svg></span>
                 <span class="pm-badge pm-untagged"><i class="pm-dot" aria-hidden="true"></i>Other / untagged</span>
-                <strong id="dashboard-wallet-untagged">₱0.00</strong>
+                <strong id="dashboard-wallet-untagged" data-no-cents-format="1">₱0.00</strong>
               </div>
             </div>
-            <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation">Reconcile</a>
+            <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Reconcile</span></a>
           </div>
         </div>
         <dl class="summary-breakdown" data-region="summary-breakdown" aria-label="Savings breakdown">
@@ -1061,7 +1068,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/dashboard.js?v=20261123-03"></script>
+  <script src="js/dashboard.js?v=20261123-04"></script>
 </body>
 
 </html>

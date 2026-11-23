@@ -3779,8 +3779,8 @@ test('dark and light theme toggle persists across tabs, updates charts, preserve
   assert.match(appCss, /html\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/);
   assert.match(appCss, /@media print\s*\{[\s\S]*?html\[data-theme="dark"\][\s\S]*?background:\s*#ffffff\s*!important/);
   assert.match(heroCss, /html\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/);
-  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-total\s*\{\s*color:#ffffff;/);
-  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-label\s*\{\s*color:#8fd2ae;/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-total\s*\{\s*color:var\(--th-gold\);/);
+  assert.match(heroCss, /html\[data-theme="dark"\]\s+\.tracked-label\s*\{\s*color:var\(--th-mut\);/);
   assert.match(heroCss, /\.month-button\s+svg\s*\{[^}]*stroke:currentColor;/);
   assert.match(heroCss, /html\[data-theme="dark"\]\s+\.month-button\s*\{[^}]*color:#ecf3ef;/);
   assert.match(heroCss, /html\[data-theme="dark"\]\s+\.month-button\s+svg\s*\{\s*stroke:currentColor;\s*\}/);
@@ -4158,9 +4158,9 @@ test('dashboard wallet pills stay compact sans-serif and group switcher lives in
   assert.match(dashboardJs, /groupIdentityEl\?\.addEventListener\('click',/);
 
   assert.match(heroCss, /#dashboard-group-bar \.group-switcher-wrap \.custom-select-selection\s*\{\s*display:none;/);
-  assert.match(heroCss, /\.summary-card \.dashboard-wallet-pill\s*\{[^}]*height:auto;\s*min-height:0;[^}]*border-radius:11px;/);
+  assert.match(heroCss, /\.summary-card \.dashboard-wallet-pill\s*\{[^}]*height:auto;\s*min-height:0;[^}]*border-radius:18px;/);
   assert.match(heroCss, /\.summary-card \.dashboard-wallet-pill strong\s*\{[^}]*"IPON Serif",serif;/);
-  assert.match(heroCss, /\.summary-card \.dashboard-wallet-link\s*\{[^}]*border-radius:11px;/);
+  assert.match(heroCss, /\.summary-card \.dashboard-wallet-link\s*\{[^}]*border-radius:16px;/);
   assert.match(heroCss, /\.summary-breakdown dt span\s*\{[^}]*display:block;/);
 });
 
