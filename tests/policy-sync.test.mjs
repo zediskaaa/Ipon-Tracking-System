@@ -72,4 +72,22 @@ test('Terms, Privacy, Data Deletion, login policy dialog, and js/policy.js stay 
   assert.match(deletion, /trusted-device OTP tokens/i);
   assert.match(deletion, /Anonymous Chat Mode/i);
   assert.match(deletion, /@username/i);
+
+  // 5. All user-facing contact email links across legal, landing, and login pages open Gmail compose directly (never mailto:)
+  const indexHtml = read('index.html');
+  for (const [name, doc] of [
+    ['index.html', indexHtml],
+    ['login.html', loginHtml],
+    ['js/policy.js', policyJs],
+    ['privacy.html', privacy],
+    ['terms.html', terms],
+    ['data-deletion.html', deletion]
+  ]) {
+    assert.doesNotMatch(doc, /href=["']mailto:/i, `${name} must not use mailto: links`);
+    assert.match(
+      doc,
+      /href="https:\/\/mail\.google\.com\/mail\/\?view=cm(?:&amp;|&)fs=1(?:&amp;|&)to=zedrickdemonteverde1@gmail\.com[^"]*"\s+target="_blank"\s+rel="noopener noreferrer"/,
+      `${name} contact email must open Gmail compose directly in a new tab`
+    );
+  }
 });
