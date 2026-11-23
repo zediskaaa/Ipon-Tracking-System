@@ -1421,39 +1421,135 @@
     }, 450);
   }
 
-  function uploadFileRawWithProgress(entry, uploadMeta, onProgress) {
+  const MAX_CHAT_DETACH_BYTES = 20 * 1024 * 1024;
+  const MAX_CHAT_BATCH_DETACH_BYTES = 40 * 1024 * 1024;
+  const CHAT_UPLOAD_TIMEOUT_MS = 120000;
+
+  async function detachChatFile(file, maxBytes = MAX_CHAT_DETACH_BYTES) {
+    if (!file || file._iponDetached) return file;
+    if (typeof ipon().detachPickedFile === 'function') {
+      return ipon().detachPickedFile(file, { maxBytes });
+    }
+    if (typeof file.arrayBuffer !== 'function') return file;
+    const size = Number(file.size || 0);
+    if (size < 0 || size > maxBytes) return file;
+    try {
+      const buffer = await file.arrayBuffer();
+      const mime = String(file.type || '');
+      const cloned = typeof File === 'function'
+        ? new File([buffer], String(file.name || 'attachment'), { type: mime, lastModified: Number(file.lastModified) || Date.now() })
+        : (typeof Blob === 'function' ? new Blob([buffer], { type: mime }) : file);
+      if (cloned && typeof cloned === 'object') {
+        try { Object.defineProperty(cloned, '_iponDetached', { value: true }); } catch { cloned._iponDetached = true; }
+      }
+      return cloned;
+    } catch {
+      return file;
+    }
+  }
+
+  function sendSignedPutXhr(signedUrl, body, contentType, onProgress) {
     return new Promise((resolve, reject) => {
-      if (uploadMeta.signedUrl && typeof XMLHttpRequest !== 'undefined') {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadMeta.signedUrl, true);
-        if (entry.file.type) xhr.setRequestHeader('Content-Type', entry.file.type);
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', signedUrl, true);
+      xhr.timeout = CHAT_UPLOAD_TIMEOUT_MS;
+      if (contentType) xhr.setRequestHeader('Content-Type', contentType);
+      if (xhr.upload) {
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) onProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
         };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            onProgress(100);
-            resolve();
-          } else {
-            reject(new Error(`Upload failed (${xhr.status}).`));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error during file upload.'));
-        xhr.send(entry.file);
-      } else {
-        ipon().client.storage
-          .from('chat-attachments')
-          .uploadToSignedUrl(uploadMeta.path, uploadMeta.token, entry.file, { contentType: entry.file.type || undefined })
-          .then(({ error }) => {
-            if (error) reject(error);
-            else {
-              onProgress(100);
-              resolve();
-            }
-          })
-          .catch(reject);
       }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onProgress(100);
+          resolve();
+        } else {
+          const err = new Error(`Upload failed (${xhr.status}).`);
+          err.httpStatus = xhr.status;
+          reject(err);
+        }
+      };
+      xhr.onerror = () => {
+        const err = new Error('Network error during file upload.');
+        err.isNetworkError = true;
+        reject(err);
+      };
+      xhr.ontimeout = () => {
+        const err = new Error('Upload timed out. Please check your connection and try again.');
+        err.isNetworkError = true;
+        reject(err);
+      };
+      xhr.onabort = () => {
+        const err = new Error('Upload was interrupted. Please try again.');
+        err.isNetworkError = true;
+        reject(err);
+      };
+      xhr.send(body);
     });
+  }
+
+  async function uploadFileRawWithProgress(entry, uploadMeta, onProgress) {
+    const contentType = String(uploadMeta.type || entry.file?.type || '').trim().toLowerCase().slice(0, 120);
+    if (uploadMeta.signedUrl) {
+      let body = await detachChatFile(entry.file, MAX_CHAT_DETACH_BYTES);
+      if (body && body !== entry.file) entry.file = body;
+      const hasXhr = typeof XMLHttpRequest !== 'undefined';
+      const hasFetch = typeof fetch === 'function';
+      let lastError = null;
+
+      if (hasXhr) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (attempt > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            if (!body?._iponDetached) {
+              body = await detachChatFile(entry.file, MAX_ATTACHMENT_BYTES);
+              if (body && body !== entry.file) entry.file = body;
+            }
+          }
+          try {
+            await sendSignedPutXhr(uploadMeta.signedUrl, body, contentType, onProgress);
+            return;
+          } catch (err) {
+            lastError = err;
+            const status = Number(err?.httpStatus || 0);
+            const retryable = Boolean(err?.isNetworkError) || status === 408 || status === 429 || status >= 500;
+            if (!retryable) throw err;
+          }
+        }
+      }
+
+      if (hasFetch) {
+        if (hasXhr) {
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          if (!body?._iponDetached) {
+            body = await detachChatFile(entry.file, MAX_ATTACHMENT_BYTES);
+            if (body && body !== entry.file) entry.file = body;
+          }
+        }
+        try {
+          const response = await fetch(uploadMeta.signedUrl, {
+            method: 'PUT',
+            headers: contentType ? { 'Content-Type': contentType } : undefined,
+            body
+          });
+          if (response.ok) {
+            onProgress(100);
+            return;
+          }
+          throw new Error(`Upload failed (${response.status}).`);
+        } catch (err) {
+          if (err?.message && /^Upload failed \(\d+\)\.$/.test(err.message)) throw err;
+          throw lastError || new Error('Network error during file upload.');
+        }
+      }
+      throw lastError || new Error('Network error during file upload.');
+    }
+
+    const { error } = await ipon().client.storage
+      .from('chat-attachments')
+      .uploadToSignedUrl(uploadMeta.path, uploadMeta.token, entry.file, { contentType: contentType || undefined });
+    if (error) throw error;
+    onProgress(100);
   }
 
   async function downloadOriginalAttachment(conversationId, path, fileName) {
@@ -3771,6 +3867,11 @@
         pending.optimizing = needUpload.some((entry) => /\.(mp4|mp3)$/i.test(entry.name) && entry.size >= 2 * 1024 * 1024 && entry.size <= 25 * 1024 * 1024);
         updatePendingProgressDom(pending);
         for (const entry of needUpload) {
+          if (entry.preparePromise) {
+            const prepared = await entry.preparePromise.catch(() => entry.file);
+            if (prepared) entry.file = prepared;
+            entry.preparePromise = null;
+          }
           if (typeof ipon().optimizeUploadMedia === 'function') entry.file = await ipon().optimizeUploadMedia(entry.file);
           entry.name = entry.file.name;
           entry.type = entry.file.type;
@@ -6028,11 +6129,12 @@
     const activeConv = state.activeThread?.conversation;
     if (activeConv && !canInteractInThread(activeConv)) {
       ipon().toast(isFriendsOnlyLocked(activeConv) ? 'This user only accepts messages and files from friends.' : 'You cannot attach files to this conversation.', 'error');
-      return;
+      return Promise.resolve();
     }
     const files = [...(fileList || [])];
-    if (!files.length) return;
+    if (!files.length) return Promise.resolve();
     const prevBatches = Math.ceil(state.uploadQueue.length / MAX_ATTACHMENTS_PER_MSG);
+    const added = [];
     for (const file of files) {
       if (state.uploadQueue.length >= MAX_QUEUE_ATTACHMENTS) {
         ipon().toast(`Attach up to ${MAX_QUEUE_ATTACHMENTS} files at a time (up to ${MAX_ATTACHMENTS_PER_MSG} per batch).`, 'error');
@@ -6057,7 +6159,9 @@
       if (kind === 'video' && previewUrl) {
         probeAndCaptureVideoMeta(previewUrl, previewUrl, { isLocalBlob: true });
       }
-      state.uploadQueue.push({ file, name, type: file.type || '', size: file.size, kind, previewUrl, progress: 0, error: '' });
+      const entry = { file, name, type: file.type || '', size: file.size, kind, previewUrl, progress: 0, error: '', preparePromise: null };
+      state.uploadQueue.push(entry);
+      added.push(entry);
     }
     const nextBatches = Math.ceil(state.uploadQueue.length / MAX_ATTACHMENTS_PER_MSG);
     if (nextBatches > 1 && nextBatches > prevBatches) {
@@ -6066,6 +6170,25 @@
     renderUploadQueue();
     const qBox = document.getElementById('msg-upload-queue');
     if (qBox) requestAnimationFrame(() => { qBox.scrollLeft = qBox.scrollWidth; });
+
+    // Sequentially detach Android WebView content:// handles into in-memory File objects
+    // before clearing the file input so multi-file sends never fail with ERR_UPLOAD_FILE_CHANGED.
+    let chain = Promise.resolve();
+    let detachedBytes = 0;
+    for (const entry of added) {
+      const size = Number(entry.file?.size || 0);
+      if (size <= MAX_CHAT_DETACH_BYTES && detachedBytes + size <= MAX_CHAT_BATCH_DETACH_BYTES && typeof entry.file?.arrayBuffer === 'function') {
+        detachedBytes += size;
+        const rawFile = entry.file;
+        const step = chain.then(() => detachChatFile(rawFile, MAX_CHAT_DETACH_BYTES)).then((cloned) => {
+          if (cloned) entry.file = cloned;
+          return entry.file;
+        }).catch(() => entry.file);
+        entry.preparePromise = step;
+        chain = step.then(() => { });
+      }
+    }
+    return chain;
   }
 
   function clearUploadQueue({ keepUrls = false } = {}) {
@@ -9143,8 +9266,12 @@
         return;
       }
       if (ev.target?.id === 'msg-file-input' || ev.target?.id === 'msg-gallery-input' || ev.target?.id === 'msg-drive-input') {
-        queuePickedFiles(ev.target.files);
-        ev.target.value = '';
+        const inputEl = ev.target;
+        try {
+          await queuePickedFiles(inputEl.files);
+        } finally {
+          inputEl.value = '';
+        }
       } else if (ev.target?.id === 'msg-group-edit-pic-input') {
         const input = ev.target;
         const file = input.files?.[0];

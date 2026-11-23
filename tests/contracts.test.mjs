@@ -6231,7 +6231,7 @@ test('migration 076, 077, Edge Function, shell integration, and UI implement Mes
   assert.match(sw, /'js\/messages\.js'/);
 
   // 4. Frontend messaging features, direct uploads, & camera/VC removal
-  assert.match(messagesJs, /xhr\.send\(entry\.file\)/);
+  assert.match(messagesJs, /xhr\.send\((?:entry\.file|body)\)/);
   assert.doesNotMatch(messagesJs, /prepareImageDataUrl|canvas\.toBlob/);
   assert.doesNotMatch(messagesJs, /CallManager|data-start-call|msg-call-dialog|msg-incoming-call-dialog/);
   assert.match(messagesJs, /download_path:\s*path/);
@@ -11337,7 +11337,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261123-08/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261123-09/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

@@ -2195,19 +2195,65 @@
     return meta.publicUrl;
   }
 
+  const MAX_DETACH_FILE_BYTES = 20 * 1024 * 1024;
+  const MAX_DETACH_BATCH_BYTES = 40 * 1024 * 1024;
+
+  function normalizeUploadContentType(type) {
+    return String(type || '').trim().toLowerCase().slice(0, 120);
+  }
+
+  async function detachPickedFile(file, { maxBytes = MAX_DETACH_FILE_BYTES } = {}) {
+    if (!file || file._iponDetached || typeof file.arrayBuffer !== 'function') return file;
+    const size = Number(file.size || 0);
+    if (size < 0 || size > maxBytes) return file;
+    try {
+      const buffer = await file.arrayBuffer();
+      const mime = String(file.type || '');
+      const cloned = typeof File === 'function'
+        ? new File([buffer], String(file.name || 'attachment'), { type: mime, lastModified: Number(file.lastModified) || Date.now() })
+        : (typeof Blob === 'function' ? new Blob([buffer], { type: mime }) : file);
+      if (cloned && typeof cloned === 'object') {
+        try { Object.defineProperty(cloned, '_iponDetached', { value: true }); } catch { cloned._iponDetached = true; }
+      }
+      return cloned;
+    } catch {
+      return file;
+    }
+  }
+
   async function uploadAuthorizedFile(client, bucket, upload, file) {
+    const contentType = normalizeUploadContentType(upload?.type || file?.type || '');
     if (upload?.signedUrl) {
-      const response = await fetch(upload.signedUrl, {
-        method: 'PUT',
-        headers: file.type ? { 'Content-Type': file.type } : undefined,
-        body: file
-      });
-      if (!response.ok) throw new Error(`Cloud upload failed (${response.status}).`);
-      return;
+      let body = await detachPickedFile(file, { maxBytes: MAX_DETACH_FILE_BYTES });
+      let lastError = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 350 : 800));
+          if (!body?._iponDetached && typeof file?.arrayBuffer === 'function') {
+            body = await detachPickedFile(file, { maxBytes: 50 * 1024 * 1024 });
+          }
+        }
+        try {
+          const response = await fetch(upload.signedUrl, {
+            method: 'PUT',
+            headers: contentType ? { 'Content-Type': contentType } : undefined,
+            body
+          });
+          if (response.ok) return;
+          const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+          lastError = new Error(`Cloud upload failed (${response.status}).`);
+          if (!retryable) throw lastError;
+        } catch (err) {
+          lastError = err;
+          const msg = String(err?.message || '');
+          if (/Cloud upload failed \(4\d\d\)/.test(msg) && !/\((408|429)\)/.test(msg)) throw err;
+        }
+      }
+      throw lastError || new Error('Cloud upload failed.');
     }
     const { error } = await client.storage
       .from(bucket)
-      .uploadToSignedUrl(upload.path, upload.token, file, { contentType: file.type || undefined });
+      .uploadToSignedUrl(upload.path, upload.token, file, { contentType: contentType || undefined });
     if (error) throw error;
   }
 
@@ -10695,7 +10741,11 @@
       if (typeof onStatus === 'function' && list.some((entry) => /\.(mp4|mp3)$/i.test(entry?.file?.name || ''))) {
         onStatus('Optimizing media…');
       }
-      const media = await Promise.all(list.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
+      const media = [];
+      for (const entry of list) {
+        const readyFile = entry.preparePromise ? (await entry.preparePromise.catch(() => entry.file)) || entry.file : entry.file;
+        media.push({ ...entry, file: await optimizeUploadMedia(readyFile) });
+      }
       if (typeof onStatus === 'function') onStatus('Uploading…');
       const { uploads = [] } = await invokeAccountFunction({
         action: 'announcement-upload-urls',
@@ -11901,9 +11951,9 @@
       viewerDialog.addEventListener('click', (event) => { if (event.target === viewerDialog) viewerDialog.close(); });
       viewerDialog.addEventListener('close', () => { stopViewerMedia(); openItemId = null; clearDeepLinkUrlState(); });
 
-      mediaInput?.addEventListener('change', () => {
+      mediaInput?.addEventListener('change', async () => {
         const chosen = [...(mediaInput.files || [])];
-        mediaInput.value = '';
+        const added = [];
         for (const file of chosen) {
           if (existingAttachments.length + queuedMedia.length >= MAX_ANNOUNCEMENT_FILES) {
             toast(`You can attach up to ${MAX_ANNOUNCEMENT_FILES} files per announcement.`, 'error');
@@ -11911,12 +11961,31 @@
           }
           try {
             const kind = classifyAnnouncementFile(file);
-            queuedMedia.push({ file, kind, previewUrl: URL.createObjectURL(file) });
+            const entry = { file, kind, previewUrl: URL.createObjectURL(file), preparePromise: null };
+            queuedMedia.push(entry);
+            added.push(entry);
           } catch (error) {
             toast(friendlyError(error), 'error');
           }
         }
         renderQueuedMedia();
+        try {
+          let detachedBytes = 0;
+          for (const entry of added) {
+            const size = Number(entry.file?.size || 0);
+            if (size <= MAX_DETACH_FILE_BYTES && detachedBytes + size <= MAX_DETACH_BATCH_BYTES) {
+              detachedBytes += size;
+              const p = detachPickedFile(entry.file, { maxBytes: MAX_DETACH_FILE_BYTES }).then((cloned) => {
+                if (cloned) entry.file = cloned;
+                return entry.file;
+              });
+              entry.preparePromise = p;
+              await p;
+            }
+          }
+        } finally {
+          mediaInput.value = '';
+        }
       });
 
       mediaPreviews?.addEventListener('click', (event) => {
@@ -15475,10 +15544,13 @@
       }).join('');
     }
 
-    function queuePickedFiles(fileList) {
+    async function queuePickedFiles(fileList) {
       const incoming = [...(fileList || [])];
-      if (!incoming.length) return;
-      let addedCount = 0;
+      if (!incoming.length) {
+        if (fileInput) fileInput.value = '';
+        return;
+      }
+      const added = [];
       for (const file of incoming) {
         if (queuedFiles.length >= MAX_DISCUSSION_FILES) {
           toast(`You can attach up to ${MAX_DISCUSSION_FILES} files per reply.`, 'error');
@@ -15490,14 +15562,31 @@
           if (duplicate) continue;
           const previewUrl = typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
           if (previewUrl) previewUrlsToRevoke.push(previewUrl);
-          queuedFiles.push({ file, previewUrl, ...meta });
-          addedCount += 1;
+          const entry = { file, previewUrl, preparePromise: null, ...meta };
+          queuedFiles.push(entry);
+          added.push(entry);
         } catch (err) {
           toast(friendlyError(err), 'error');
         }
       }
-      if (fileInput) fileInput.value = '';
-      if (addedCount > 0) renderQueuedFiles();
+      if (added.length > 0) renderQueuedFiles();
+      try {
+        let detachedBytes = 0;
+        for (const entry of added) {
+          const size = Number(entry.file?.size || 0);
+          if (size <= MAX_DETACH_FILE_BYTES && detachedBytes + size <= MAX_DETACH_BATCH_BYTES) {
+            detachedBytes += size;
+            const p = detachPickedFile(entry.file, { maxBytes: MAX_DETACH_FILE_BYTES }).then((cloned) => {
+              if (cloned) entry.file = cloned;
+              return entry.file;
+            });
+            entry.preparePromise = p;
+            await p;
+          }
+        }
+      } finally {
+        if (fileInput) fileInput.value = '';
+      }
     }
 
     function renderAttachmentMarkup(att, authorName, whenLabel) {
@@ -15700,7 +15789,11 @@
       try {
         const attachments = [];
         if (pendingUploads.length) {
-          const media = await Promise.all(pendingUploads.map(async (entry) => ({ ...entry, file: await optimizeUploadMedia(entry.file) })));
+          const media = [];
+          for (const entry of pendingUploads) {
+            const readyFile = entry.preparePromise ? (await entry.preparePromise.catch(() => entry.file)) || entry.file : entry.file;
+            media.push({ ...entry, file: await optimizeUploadMedia(readyFile) });
+          }
           setBusy(submitBtn, true, 'Uploading…');
           const { uploads = [] } = await invokeAccountFunction({
             action: 'record-comment-upload-urls',
@@ -18992,7 +19085,7 @@
 
   window.Ipon = {
     get client() { return getClient(); }, configured, init, rpc, fireKeepaliveRpc, money, moneyHtml, formatCentavosInNode, dateLabel, isoDate, monthStart,
-    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
+    escapeHtml, initials, avatarMarkup, bindAvatarFallbacks, prepareAvatarDataUrl, prepareImageDataUrl, detachPickedFile, optimizeUploadImage, optimizeUploadMedia, isSafeImageRef, uploadMediaDataUrl, downloadFile, downloadCsv, printPage, openImageViewer, openVideoViewer, handleNativeBack, bindReceiptPicker, openAvatarCropper, openAccountDialog, normalizeNamePart, validNamePart, validFullName, nameValidationError, fullNameValidationError, nameRuleForField, NAME_RULE, validateNameInput, validateNameFields, prepareNameInputs, syncProfileNameMode, prepareInviteNameInput, validPhoneNumber, validatePhoneInput, prepareNumericInputs, preparePesoInputs, validateNumericInput, MAX_MONEY_AMOUNT, parseMoneyAmount, validateMoneyInput, guardMoneyInput, setFieldError, getValidationMessage, profileNeedsSetup, accountSetupUrl, passwordIssue, bindPasswordStrength, generateTemporaryPassword, autofillTemporaryPassword, prepareTemporaryPassword, getDeviceToken, mfaSettingsMarkup, bindMfaSettings, requiresMfaChallenge, changePassword, homeForRole, signOut, toast, broadcastAuthEvent, friendlyError, showInlineError, setBusy, setLoading, bindDirtySaveForm, confirmAction, requestRecordAction, showGroupRequiredDialog, renderGroupRequiredCard, inviteAccount, notifyAdminRequestDecision, sendAdminRequestVerificationCode, verifyAdminRequestVerificationCode, submitAdminRequest, unblockAdminRequest, showInviteSummary, switchActiveGroup, defaultPermissionsForRole, refreshMyPermissions, remindUnpaidMembers, bindAnnouncements, subscribeToChanges, isUserOnline, onlineUserIds, syncPresenceDots, getGeminiApiKey, getGeminiModel, callGemini, invokeAccountFunction, notifyAccountStatusChange, withTimeout, registerMemberAvatars, getMemberAvatar, enhanceMemberSelect, enhancePaymentSelect, populateGroupSelect, syncWorkspaceMode,
     getTheme, setTheme, toggleTheme, isDarkTheme, chartThemeOptions, mountThemeControls,
     playUiSound, isUiSoundEnabled, setUiSoundEnabled, primeUiSound,
     setOnlineVisibility, syncMessagesBadges, canViewAnnouncementReactors, supportsNativeScreenshotProtection, probeNativeScreenshotProtection, getClientPlatform, reportClientPlatform, refreshPeerClientPlatforms, hasLiveBrowserSession,

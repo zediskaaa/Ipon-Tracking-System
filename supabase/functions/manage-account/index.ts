@@ -3443,14 +3443,15 @@ Deno.serve(async (request) => {
       for (let i = 0; i < files.length; i += 1) {
         const entry = (files[i] || {}) as { name?: unknown; kind?: unknown; type?: unknown };
         const cleanName = String(entry.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'media';
+        const rawType = String(entry.type || '').trim().toLowerCase().slice(0, 120);
         const kind = entry.kind === 'video' ? 'video' : 'image';
         const path = `${prefix}${announcementId}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
         if (isR2Path(path)) {
-          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(ANNOUNCEMENTS_BUCKET, path, 'PUT', String(entry.type || '')), name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(ANNOUNCEMENTS_BUCKET, path, 'PUT', rawType), name: String(entry.name || cleanName).slice(0, 120), kind, type: rawType });
         } else {
           const { data, error } = await admin.storage.from(ANNOUNCEMENTS_BUCKET).createSignedUploadUrl(path);
           if (error || !data) throw error || new Error('Could not create upload URL.');
-          uploads.push({ path, token: data.token, name: String(entry.name || cleanName).slice(0, 120), kind, type: String(entry.type || '') });
+          uploads.push({ path, token: data.token, name: String(entry.name || cleanName).slice(0, 120), kind, type: rawType });
         }
       }
       return json({ uploads });
@@ -3517,11 +3518,11 @@ Deno.serve(async (request) => {
         const kind = entry.kind === 'image' ? 'image' : (entry.kind === 'video' ? 'video' : 'file');
         const path = `${actor.group_id}/${recordType}/${recordId}/${userResult.user.id}/${r2Storage() ? 'r2/' : ''}${i}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
         if (isR2Path(path)) {
-          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(RECORD_COMMENTS_BUCKET, path, 'PUT', rawType), name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+          uploads.push({ path, token: 'r2', signedUrl: await signR2Object(RECORD_COMMENTS_BUCKET, path, 'PUT', rawType), name: rawName, kind, type: rawType, size: Math.max(0, Math.round(rawSize)) });
         } else {
           const { data, error } = await admin.storage.from(RECORD_COMMENTS_BUCKET).createSignedUploadUrl(path);
           if (error || !data) throw error || new Error('Could not prepare file upload.');
-          uploads.push({ path, token: data.token, name: rawName, kind, type: String(entry.type || '').slice(0, 120), size: Math.max(0, Math.round(rawSize)) });
+          uploads.push({ path, token: data.token, name: rawName, kind, type: rawType, size: Math.max(0, Math.round(rawSize)) });
         }
       }
       return json({ uploads });
@@ -3614,7 +3615,7 @@ Deno.serve(async (request) => {
           signedUrl: signedUrl || legacyUpload?.data?.signedUrl,
           name: rawName,
           kind,
-          type: String(entry.type || '').slice(0, 120),
+          type: rawType,
           size: Math.max(0, Math.round(rawSize))
         });
       }

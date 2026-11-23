@@ -92,10 +92,14 @@ public class MainActivity extends BridgeActivity {
             if (result.getResultCode() == Activity.RESULT_OK && data != null) {
                 final ClipData clip = data.getClipData();
                 if (clip != null && clip.getItemCount() > 0) {
-                    uris = new Uri[clip.getItemCount()];
+                    final java.util.ArrayList<Uri> picked = new java.util.ArrayList<>(clip.getItemCount());
                     for (int i = 0; i < clip.getItemCount(); i++) {
-                        uris[i] = clip.getItemAt(i).getUri();
+                        final ClipData.Item item = clip.getItemAt(i);
+                        if (item != null && item.getUri() != null) {
+                            picked.add(item.getUri());
+                        }
                     }
+                    uris = picked.isEmpty() ? null : picked.toArray(new Uri[0]);
                 } else if (data.getData() != null) {
                     uris = new Uri[] { data.getData() };
                 } else {
@@ -258,6 +262,7 @@ public class MainActivity extends BridgeActivity {
         if ("gallery".equals(source)) {
             if (Build.VERSION.SDK_INT >= 33) {
                 final Intent photoPicker = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                photoPicker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 if (allowMultiple) {
                     photoPicker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, Math.min(20, MediaStore.getPickImagesMaxLimit()));
                 }
@@ -266,6 +271,7 @@ public class MainActivity extends BridgeActivity {
                 }
             }
             final Intent galleryIntent = new Intent(Intent.ACTION_PICK);
+            galleryIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             galleryIntent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
             galleryIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] { "image/*", "video/*" });
             if (allowMultiple) galleryIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -277,6 +283,7 @@ public class MainActivity extends BridgeActivity {
         if ("gdrive".equals(source)) {
             final Intent driveIntent = new Intent(Intent.ACTION_GET_CONTENT);
             driveIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            driveIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             driveIntent.setType("*/*");
             driveIntent.setPackage("com.google.android.apps.docs");
             driveIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
@@ -286,6 +293,7 @@ public class MainActivity extends BridgeActivity {
             }
             final Intent driveDocsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             driveDocsIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            driveDocsIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             driveDocsIntent.setType("*/*");
             driveDocsIntent.putExtra("android.content.extra.SHOW_ADVANCED", true);
             driveDocsIntent.putExtra(Intent.EXTRA_LOCAL_ONLY, false);
@@ -308,6 +316,7 @@ public class MainActivity extends BridgeActivity {
         if ("files".equals(source)) {
             final Intent docsIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             docsIntent.addCategory(Intent.CATEGORY_OPENABLE);
+            docsIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             docsIntent.setType("*/*");
             if (Build.VERSION.SDK_INT >= 26) {
                 docsIntent.putExtra(
