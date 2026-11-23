@@ -108,7 +108,7 @@ test('dashboard .summary-breakdown markup, scoped CSS, and light/dark tokens mat
 
   // Reference visual tokens and layout rules scoped strictly to .summary-breakdown
   assert.match(css, /\.summary-breakdown\s*\{[^}]*--sc-card:#fffdf9;[^}]*--sc-line:#ece4d8;[^}]*--sc-green:#14543f;[^}]*--sc-red:#b3322b;[^}]*--sc-amber:#9a6a14;/s);
-  assert.match(css, /html\[data-theme="dark"\] \.summary-breakdown\s*\{[^}]*--sc-card:#1b1814;[^}]*--sc-line:#2e2a23;[^}]*--sc-green:#7fd1a6;[^}]*--sc-red:#f09189;[^}]*--sc-amber:#ebc16a;/s);
+  assert.match(css, /html\[data-theme="dark"\] \.summary-breakdown\s*\{[^}]*--sc-card:#1c352d;[^}]*--sc-line:rgba\(164,218,192,\.22\);[^}]*--sc-green:#7fe0ad;[^}]*--sc-red:#f59c95;[^}]*--sc-amber:#f2c86f;/s);
   assert.match(css, /\.summary-breakdown \.breakdown-tile\s*\{[^}]*padding:20px 20px 18px;[^}]*border-radius:22px;/s);
   assert.match(css, /\.summary-breakdown \.breakdown-tile::before\s*\{[^}]*radial-gradient\(120% 90% at 0% 0%,var\(--sc-tint\),transparent 60%\)/s);
   assert.match(css, /\.summary-breakdown \.breakdown-tile\.is-zero::before\s*\{[^}]*opacity:\.45;/s);

@@ -1402,26 +1402,26 @@ body[data-budget-mode="monitor"] #budget-header-actions {
   color: #a93228;
 }
 
-/* Dark Theme (Exact Reference Obsidian Warm-Paper Palette) */
+/* Dark Theme (Elevated Forest-Emerald Palette matching myIPON) */
 html[data-theme="dark"] .cf-monitor {
-  --cf-bg: #12100d;
-  --cf-card: #1b1814;
-  --cf-line: #2e2a23;
-  --cf-ink: #f1ebe0;
-  --cf-muted: #a39b8c;
-  --cf-green: #7fd1a6;
-  --cf-green-bg: #1f3a2e;
-  --cf-green-tint: #18241e;
-  --cf-red: #f09189;
-  --cf-red-bg: #43211e;
-  --cf-red-tint: #241816;
-  --cf-amber: #ebc16a;
-  --cf-amber-bg: #443515;
-  --cf-amber-tint: #221d11;
-  --cf-blue: #8cc3df;
-  --cf-blue-bg: #1d3342;
-  --cf-blue-tint: #172229;
-  --cf-shadow: 0 14px 30px -18px rgba(0, 0, 0, .7);
+  --cf-bg: #11221d;
+  --cf-card: #1c352d;
+  --cf-line: rgba(164, 218, 192, .22);
+  --cf-ink: #f1f7f3;
+  --cf-muted: #a4beb3;
+  --cf-green: #7fe0ad;
+  --cf-green-bg: rgba(46, 152, 99, .28);
+  --cf-green-tint: rgba(127, 224, 173, .16);
+  --cf-red: #f59c95;
+  --cf-red-bg: rgba(214, 78, 70, .25);
+  --cf-red-tint: rgba(245, 156, 149, .14);
+  --cf-amber: #f2c86f;
+  --cf-amber-bg: rgba(226, 174, 66, .25);
+  --cf-amber-tint: rgba(242, 200, 111, .15);
+  --cf-blue: #90cce8;
+  --cf-blue-bg: rgba(74, 148, 189, .26);
+  --cf-blue-tint: rgba(144, 204, 232, .14);
+  --cf-shadow: 0 12px 26px -14px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 html[data-theme="dark"] .cf-insight-panel {
   background: var(--cf-card);
@@ -1430,7 +1430,7 @@ html[data-theme="dark"] .cf-insight-panel {
 }
 html[data-theme="dark"] .cf-chart-nav,
 html[data-theme="dark"] .cf-compare-panel {
-  background: #15130f;
+  background: #152922;
   border-color: var(--cf-line);
 }
 html[data-theme="dark"] .cf-compare-toggle,
@@ -1515,7 +1515,7 @@ html[data-theme="dark"] .cf-today-btn {
 html[data-theme="dark"] .cf-breakdown-card,
 html[data-theme="dark"] .cf-bars-wrap,
 html[data-theme="dark"] .cf-history-row {
-  background: #15130f;
+  background: #152922;
   border-color: var(--cf-line);
 }
 html[data-theme="dark"] .cf-summary-inline-btn {
@@ -1534,7 +1534,7 @@ html[data-theme="dark"] .cf-impact-box {
   border-color: var(--cf-line);
 }
 html[data-theme="dark"] .cf-preset-chip {
-  background: #15130f;
+  background: #152922;
   border-color: var(--cf-line);
   color: var(--cf-ink);
 }

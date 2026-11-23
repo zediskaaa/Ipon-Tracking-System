@@ -33,6 +33,7 @@ test('dashboard .summary-hero markup and scoped CSS match Tracked Savings refere
   assert.match(css, /\.summary-card \.dashboard-wallet-pill\s*\{[^}]*border-radius:18px;[^}]*radial-gradient\(120% 100% at 0% 0%,var\(--th-tn/s);
   assert.match(css, /\.summary-card \.dashboard-wallet-pill > \.wallet-pill-wm\s*\{[^}]*width:92px;\s*height:92px;[^}]*opacity:\.08;/s);
   assert.match(css, /\.summary-card \.dashboard-wallet-link\s*\{[^}]*border-radius:16px;/s);
+  assert.match(css, /html\[data-theme="dark"\]\s+\.summary-card\s+\.dashboard-wallet-strip\s*\{[^}]*background:transparent;/s);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\s*\{[\s\S]*?\.record-entry-action,\.summary-card \.dashboard-wallet-link/);
 });
 

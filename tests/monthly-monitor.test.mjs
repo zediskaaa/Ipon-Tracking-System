@@ -52,14 +52,14 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.match(html, /id="cf-exp-share-bar"[^>]*role="progressbar"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261123-03/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261123-04/);
   assert.match(html, /js\/cashflow-monitor\.js\?v=20261123-01/);
   // Personal Monthly Monitor expenses must NEVER be marked data-group-only (must stay available in both Solo and Group workspaces)
   const monitorBlock = html.match(/<section class="cf-monitor"[\s\S]*?<div id="budget-allocation-section"/)?.[0] || '';
   assert.doesNotMatch(monitorBlock, /data-group-only/i, 'Monthly Income & Expense Monitor must remain available in both Solo and Group workspaces');
   // Reference visual tokens and sliding tab rules
   assert.match(css, /\.cf-monitor\s*\{[^}]*--cf-card:\s*#fffdf9;[^}]*--cf-line:\s*#ece4d8;[^}]*--cf-green:\s*#14543f;[^}]*--cf-red:\s*#b3322b;[^}]*--cf-amber:\s*#9a6a14;[^}]*--cf-blue:\s*#2d5f7a;/s);
-  assert.match(css, /html\[data-theme="dark"\] \.cf-monitor\s*\{[^}]*--cf-bg:\s*#12100d;[^}]*--cf-card:\s*#1b1814;[^}]*--cf-line:\s*#2e2a23;[^}]*--cf-ink:\s*#f1ebe0;[^}]*--cf-green:\s*#7fd1a6;[^}]*--cf-red:\s*#f09189;[^}]*--cf-amber:\s*#ebc16a;[^}]*--cf-blue:\s*#8cc3df;/s);
+  assert.match(css, /html\[data-theme="dark"\] \.cf-monitor\s*\{[^}]*--cf-bg:\s*#11221d;[^}]*--cf-card:\s*#1c352d;[^}]*--cf-line:\s*rgba\(164,\s*218,\s*192,\s*\.22\);[^}]*--cf-ink:\s*#f1f7f3;[^}]*--cf-green:\s*#7fe0ad;[^}]*--cf-red:\s*#f59c95;[^}]*--cf-amber:\s*#f2c86f;[^}]*--cf-blue:\s*#90cce8;/s);
   assert.match(css, /\.cf-kpi-card\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*var\(--cf-card\);/s);
   assert.match(css, /\.cf-kpi-card::before\s*\{[^}]*radial-gradient\(110% 100% at 0% 0%,\s*var\(--cf-tint,\s*transparent\),\s*transparent 62%\)/s);
   assert.match(css, /\.cf-segmented\[data-t="1"\] \.cf-seg-pill\s*\{\s*transform:\s*translateX\(100%\);\s*\}/);
