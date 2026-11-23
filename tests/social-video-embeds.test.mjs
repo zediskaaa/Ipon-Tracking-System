@@ -250,7 +250,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-12"><\/script>\s*<script src="js\/messages\.js\?v=20261123-08"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-12"><\/script>\s*<script src="js\/messages\.js\?v=20261123-09"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture + Edge Function resolver
@@ -268,6 +268,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   assert.match(msgJs, /stopOtherActivePlayers/);
   assert.match(msgJs, /openShareLinkDialog/);
   assert.match(msgJs, /myipon:native-share/);
+  assert.match(msgJs, /\.msg-social-poster,\s*\.msg-social-stage,\s*\.msg-social-fallback/);
 
   // CSS rules for inline social player & share dialog: zero side margin on bubble, fixed non-growing portrait size, circular close button
   const css = read('css/app.css');

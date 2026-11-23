@@ -9409,7 +9409,7 @@
       if (!row || row.classList?.contains?.('is-pending')) return null;
       if (row.querySelector?.('.msg-bubble.is-deleted')) return null;
       if (state.activeThread?.conversation && !canInteractInThread(state.activeThread.conversation)) return null;
-      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn');
+      const mediaSurface = target?.closest?.('.msg-img-open-btn, .msg-att-video, .msg-video-center-play, .msg-att-doc-btn, .msg-social-poster, .msg-social-stage, .msg-social-fallback');
       if (target?.closest?.('button, a, input, textarea, select, [role="button"], .msg-video-controls, .msg-voice-play-btn') && !mediaSurface) return null;
       if (pointerType === 'mouse' && target?.closest?.('.msg-text, .msg-reply-quote, .msg-sender-name')) return null;
       const msgId = row.dataset?.msgId;

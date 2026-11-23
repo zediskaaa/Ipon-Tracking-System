@@ -27205,6 +27205,9 @@ small .ipon-cents {
   background: radial-gradient(circle at 22% 18%, rgba(35, 114, 83, .55), rgba(10, 22, 18, .96) 72%);
   overflow: hidden;
   text-align: left;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .msg-social-card.is-youtube .msg-social-poster {
   background: radial-gradient(circle at 22% 18%, rgba(214, 42, 34, .46), rgba(16, 17, 21, .96) 72%);
@@ -27222,6 +27225,8 @@ small .ipon-cents {
   height: 100%;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
   transition: transform .26s ease;
 }
 .msg-social-poster:hover .msg-social-thumb {
