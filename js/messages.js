@@ -1071,12 +1071,12 @@
       </dialog>
 
       <!-- Forward Message Picker Dialog -->
-      <dialog class="form-dialog msg-sub-dialog" id="msg-forward-dialog" aria-labelledby="msg-forward-title">
+      <dialog class="form-dialog msg-sub-dialog msg-forward-dialog" id="msg-forward-dialog" aria-labelledby="msg-forward-title">
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div>
               <h2 id="msg-forward-title">Forward message</h2>
-              <p>Select a person or conversation to forward this message to.</p>
+              <p>Tap Send beside each chat to forward to one or more people.</p>
             </div>
             <button class="dialog-close" type="button" data-msg-forward-close aria-label="Close forward dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
@@ -6921,6 +6921,97 @@
     revealFloatingMenu(menu);
   }
 
+  const FWD_SENT_CHECK_SVG = '<svg class="msg-forward-sent-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.8 9.6 17.4 19 8"/></svg>';
+  const FWD_LINK_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+  const FWD_QUOTE_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  const FWD_MEDIA_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5-4 4-2-2-5 5"/></svg>';
+  const FWD_FILE_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
+  function formatCompactUrlText(rawUrl) {
+    if (typeof window?.IponSocialEmbeds?.formatCleanUrlDisplay === 'function') {
+      return window.IponSocialEmbeds.formatCleanUrlDisplay(rawUrl);
+    }
+    try {
+      const u = new URL(String(rawUrl || '').trim());
+      return `${u.hostname.replace(/^www\./i, '')}${u.pathname.replace(/\/+$/, '')}`;
+    } catch {
+      return String(rawUrl || '').trim().replace(/^https?:\/\//i, '').slice(0, 80);
+    }
+  }
+
+  function renderForwardPreviewHtml(messageObj) {
+    const rawBody = String(messageObj?.body || '').trim();
+    const socialEmbeds = rawBody && typeof window?.IponSocialEmbeds?.extractSocialVideoEmbeds === 'function'
+      ? window.IponSocialEmbeds.extractSocialVideoEmbeds(rawBody, 1)
+      : [];
+    if (socialEmbeds.length && typeof window?.IponSocialEmbeds?.renderCompactLinkPreviewHtml === 'function') {
+      return window.IponSocialEmbeds.renderCompactLinkPreviewHtml(socialEmbeds[0], { caption: rawBody });
+    }
+
+    const urls = rawBody && typeof window?.IponSocialEmbeds?.extractUrls === 'function'
+      ? window.IponSocialEmbeds.extractUrls(rawBody)
+      : (rawBody.match(/https?:\/\/[^\s<>"']+/gi) || []);
+    if (urls.length) {
+      const cleanUrl = formatCompactUrlText(urls[0]);
+      const host = cleanUrl.split('/')[0] || 'Link';
+      const caption = rawBody.replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/\s+/g, ' ').trim();
+      const titleText = caption || host;
+      return `<div class="msg-forward-preview is-link">
+        <div class="msg-forward-thumb is-link" aria-hidden="true">
+          <span class="msg-forward-thumb-fallback">${FWD_LINK_ICON_SVG}</span>
+        </div>
+        <div class="msg-forward-preview-copy">
+          <span class="msg-forward-preview-kicker">${FWD_LINK_ICON_SVG}<span>Link</span></span>
+          <strong class="msg-forward-preview-title" title="${escAttr(titleText)}">${escapeHtml(titleText)}</strong>
+          <small class="msg-forward-preview-sub" title="${escAttr(cleanUrl)}">${escapeHtml(cleanUrl)}</small>
+        </div>
+      </div>`;
+    }
+
+    const atts = Array.isArray(messageObj?.attachments) ? messageObj.attachments : [];
+    if (atts.length) {
+      const first = atts[0] || {};
+      const kind = detectAttachmentKind(first);
+      const cachedUrl = first.path ? getCachedSignedUrl(first.path) : '';
+      const badgeCount = atts.length > 1 ? `<span class="msg-forward-thumb-count">+${atts.length - 1}</span>` : '';
+      const kindLabel = kind === 'image' ? 'Photo' : kind === 'video' ? 'Video' : kind === 'audio' ? 'Voice message' : 'Attachment';
+      const thumbInner = kind === 'image' && cachedUrl
+        ? `<span class="msg-forward-thumb-fallback">${FWD_MEDIA_ICON_SVG}</span><img class="msg-forward-thumb-img" src="${escAttr(cachedUrl)}" alt="" loading="eager">${badgeCount}`
+        : `<span class="msg-forward-thumb-fallback">${kind === 'image' || kind === 'video' ? FWD_MEDIA_ICON_SVG : FWD_FILE_ICON_SVG}</span>${badgeCount}`;
+      const titleText = rawBody || first.name || (atts.length > 1 ? `${atts.length} attachments` : kindLabel);
+      const subText = atts.length > 1
+        ? `${atts.length} items attached`
+        : (first.size ? `${kindLabel} · ${formatBytes(first.size)}` : kindLabel);
+      return `<div class="msg-forward-preview is-media">
+        <div class="msg-forward-thumb is-media" aria-hidden="true">${thumbInner}</div>
+        <div class="msg-forward-preview-copy">
+          <span class="msg-forward-preview-kicker">${kind === 'image' || kind === 'video' ? FWD_MEDIA_ICON_SVG : FWD_FILE_ICON_SVG}<span>${escapeHtml(kindLabel)}</span></span>
+          <strong class="msg-forward-preview-title" title="${escAttr(titleText)}">${escapeHtml(titleText)}</strong>
+          <small class="msg-forward-preview-sub">${escapeHtml(subText)}</small>
+        </div>
+      </div>`;
+    }
+
+    const cleanText = rawBody.replace(/\s+/g, ' ').trim() || 'Message';
+    return `<div class="msg-forward-preview is-text">
+      <div class="msg-forward-thumb is-text" aria-hidden="true">
+        <span class="msg-forward-thumb-fallback">${FWD_QUOTE_ICON_SVG}</span>
+      </div>
+      <div class="msg-forward-preview-copy">
+        <span class="msg-forward-preview-kicker">${FWD_QUOTE_ICON_SVG}<span>Message</span></span>
+        <strong class="msg-forward-preview-title" title="${escAttr(cleanText)}">${escapeHtml(cleanText.slice(0, 140))}</strong>
+        <small class="msg-forward-preview-sub">Ready to forward</small>
+      </div>
+    </div>`;
+  }
+
+  function updateForwardFooterCount(statusEl, count, idleLabel = 'Tap Send to forward') {
+    if (!statusEl) return;
+    const total = Math.max(0, Number(count || 0));
+    statusEl.textContent = total > 0 ? `Sent to ${total} ${total === 1 ? 'chat' : 'chats'}` : idleLabel;
+    statusEl.classList?.toggle?.('has-sent', total > 0);
+  }
+
   async function openForwardDialog(messageObj) {
     if (state.activeThread?.conversation?.block_forwarding || state.activeThread?.conversation?.anonymous_enabled) {
       ipon().toast('Forwarding is disabled in this chat.', 'error');
@@ -6929,72 +7020,45 @@
     const dialog = document.getElementById('msg-forward-dialog');
     const body = document.getElementById('msg-forward-body');
     if (!dialog || !body) return;
-    const items = [];
-    const seenDirectUsers = new Set();
-    if (initializedProfile?.id) {
-      seenDirectUsers.add(initializedProfile.id);
-      items.push({
-        isGroup: false,
-        userId: initializedProfile.id,
-        name: initializedProfile.full_name || 'You',
-        avatar_url: initializedProfile.avatar_url,
-        sub: 'You · Personal notes & saved messages',
-        convId: state.conversations.find((c) => !isGroupConv(c) && String(c.peer?.id || '') === String(initializedProfile.id))?.id || null
-      });
-    }
-    state.conversations
-      .filter((c) => c.status === 'ACCEPTED' && !c.anonymous_enabled && (isGroupConv(c) || (!c.peer?.is_blocked && c.peer?.can_message !== false && c.peer?.friends_only_locked !== true)))
-      .forEach((c) => {
-        if (isGroupConv(c)) {
-          items.push({
-            isGroup: true,
-            conv: c,
-            userId: c.id,
-            name: convDisplayTitle(c),
-            sub: `Group · ${Number(c.member_count || 2)} members`,
-            convId: c.id
-          });
-        } else if (c.peer?.id) {
-          seenDirectUsers.add(c.peer.id);
-          items.push({
-            isGroup: false,
-            userId: c.peer.id,
-            name: c.peer.full_name,
-            avatar_url: c.peer.avatar_url,
-            sub: c.peer.username ? `@${c.peer.username}` : '',
-            convId: c.id
-          });
-        }
-      });
-    (state.overview?.friends || []).forEach((f) => {
-      if (!seenDirectUsers.has(f.id)) {
-        seenDirectUsers.add(f.id);
-        items.push({
-          isGroup: false,
-          userId: f.id,
-          name: f.full_name,
-          avatar_url: f.avatar_url,
-          sub: f.username ? `@${f.username}` : 'Friend',
-          convId: null
-        });
-      }
-    });
+    const items = collectShareRecipients();
+    state.forwardSentKeys = new Set();
+    const previewHtml = renderForwardPreviewHtml(messageObj);
 
     body.innerHTML = items.length
-      ? `<p class="msg-forward-quote">"${escapeHtml(String(messageObj.body || 'Attachment').slice(0, 140))}"</p>
-         <div class="msg-forward-list">${items.map((item) => `
-           <button type="button" class="msg-forward-row" data-fwd-user="${escAttr(item.userId)}" data-fwd-conv="${escAttr(item.convId || '')}">
+      ? `${previewHtml}
+         <div class="msg-search-input-wrap msg-forward-search-wrap">
+           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+           <input type="search" id="msg-forward-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search recipients to forward this message to">
+         </div>
+         <div class="msg-forward-list" id="msg-forward-list">${items.map((item) => {
+           const fwdKey = item.isGroup ? `g:${item.convId}` : `u:${item.userId}`;
+           const searchBlob = `${item.name || ''} ${item.sub || ''}`.toLowerCase();
+           return `<button type="button" class="msg-forward-row" data-fwd-user="${escAttr(item.userId)}" data-fwd-conv="${escAttr(item.convId || '')}" data-fwd-key="${escAttr(fwdKey)}" data-fwd-name="${escAttr(item.name || '')}" data-fwd-search="${escAttr(searchBlob)}" aria-label="Send to ${escAttr(item.name || 'recipient')}">
              ${item.isGroup
                ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
                : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
              <span class="msg-forward-meta">
-               <strong>${escapeHtml(item.name)}${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
+               <strong><span class="msg-forward-name">${escapeHtml(item.name)}</span>${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
                ${item.sub ? `<small>${escapeHtml(item.sub)}</small>` : ''}
              </span>
-             <span class="button button-secondary button-sm">Send</span>
-           </button>`).join('')}</div>`
-      : '<p class="empty-state">Add friends or open conversations first to forward messages.</p>';
+             <span class="msg-forward-action" data-fwd-action>Send</span>
+           </button>`;
+         }).join('')}</div>
+         <p class="empty-state msg-forward-empty" id="msg-forward-empty" hidden>No matching chats or friends found.</p>
+         <div class="msg-forward-footer" id="msg-forward-footer">
+           <span class="msg-forward-status" id="msg-forward-status" aria-live="polite">Tap Send to forward</span>
+           <button type="button" class="button button-primary button-sm msg-forward-done-btn" data-msg-forward-close>Done</button>
+         </div>`
+      : `${previewHtml}<p class="empty-state">Add friends or open conversations first to forward messages.</p>
+         <div class="msg-forward-footer" id="msg-forward-footer">
+           <span class="msg-forward-status" id="msg-forward-status" aria-live="polite">No recipients available</span>
+           <button type="button" class="button button-primary button-sm msg-forward-done-btn" data-msg-forward-close>Done</button>
+         </div>`;
     ipon().bindAvatarFallbacks?.(body);
+    body.querySelectorAll?.('.msg-forward-thumb-img').forEach((img) => {
+      img.addEventListener?.('error', () => { img.remove?.(); }, { once: true });
+    });
+    window.IponSocialEmbeds?.hydrateVisibleSocialMeta?.(body, resolveSocialEmbedUrl);
     body.dataset.fwdMsgId = messageObj.id;
     body.dataset.fwdBody = messageObj.body || '';
     if (!dialog.open) dialog.showModal();
@@ -7087,28 +7151,36 @@
     if (!dialog || !body) return false;
 
     const items = collectShareRecipients();
-    const previewHtml = norm.social && window.IponSocialEmbeds?.renderSocialEmbedCardHtml
-      ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderSocialEmbedCardHtml(norm.social, { compact: true })}</div>`
-      : '';
+    state.shareSentKeys = new Set();
+    const previewHtml = norm.social && window.IponSocialEmbeds?.renderCompactLinkPreviewHtml
+      ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderCompactLinkPreviewHtml(norm.social, { caption: norm.text })}</div>`
+      : (norm.social && window.IponSocialEmbeds?.renderSocialEmbedCardHtml
+        ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderSocialEmbedCardHtml(norm.social, { compact: true })}</div>`
+        : '');
     const listHtml = items.length
       ? `<div class="msg-search-input-wrap msg-share-search-wrap">
            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
            <input type="search" id="msg-share-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search chats or people to share with">
          </div>
          <div class="msg-forward-list msg-share-list" id="msg-share-list">${items.map((item) => {
+           const shareKey = item.isGroup ? `g:${item.convId}` : `u:${item.userId}`;
            const searchBlob = `${item.name || ''} ${item.sub || ''}`.toLowerCase();
-           return `<button type="button" class="msg-forward-row msg-share-row" data-share-send-user="${escAttr(item.userId)}" data-share-send-conv="${escAttr(item.convId || '')}" data-share-search="${escAttr(searchBlob)}">
+           return `<button type="button" class="msg-forward-row msg-share-row" data-share-send-user="${escAttr(item.userId)}" data-share-send-conv="${escAttr(item.convId || '')}" data-share-key="${escAttr(shareKey)}" data-share-name="${escAttr(item.name || '')}" data-share-search="${escAttr(searchBlob)}">
              ${item.isGroup
                ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
                : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
              <span class="msg-forward-meta">
-               <strong>${escapeHtml(item.name)}${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
+               <strong><span class="msg-forward-name">${escapeHtml(item.name)}</span>${item.isGroup ? '' : userBadgesHtml({ id: item.userId, full_name: item.name })}</strong>
                ${item.sub ? `<small>${escapeHtml(item.sub)}</small>` : ''}
              </span>
-             <span class="button button-primary button-sm" data-share-btn-label>Send</span>
+             <span class="msg-forward-action" data-share-btn-label>Send</span>
            </button>`;
          }).join('')}</div>
-         <p class="empty-state msg-share-empty" id="msg-share-empty" hidden>No matching chats or friends found.</p>`
+         <p class="empty-state msg-share-empty" id="msg-share-empty" hidden>No matching chats or friends found.</p>
+         <div class="msg-forward-footer" id="msg-share-footer">
+           <span class="msg-forward-status" id="msg-share-status" aria-live="polite">Tap Send to share</span>
+           <button type="button" class="button button-primary button-sm msg-forward-done-btn" data-msg-share-close>Done</button>
+         </div>`
       : '<p class="empty-state">Add friends or open conversations first to send shared links.</p>';
 
     body.innerHTML = `${previewHtml}
@@ -8777,13 +8849,22 @@
 
       const fwdRow = ev.target.closest?.('[data-fwd-user]');
       if (fwdRow) {
-        const dialog = document.getElementById('msg-forward-dialog');
+        if (fwdRow.disabled || fwdRow.dataset.fwdState === 'sending' || fwdRow.dataset.fwdState === 'sent') return;
         const body = document.getElementById('msg-forward-body');
+        if (!body) return;
+        const pill = fwdRow.querySelector?.('[data-fwd-action]');
+        const targetName = fwdRow.dataset.fwdName || 'recipient';
+        const fwdKey = fwdRow.dataset.fwdKey || `${fwdRow.dataset.fwdConv || ''}:${fwdRow.dataset.fwdUser || ''}`;
+        fwdRow.disabled = true;
+        fwdRow.dataset.fwdState = 'sending';
+        fwdRow.classList?.add?.('is-sending');
+        if (pill) pill.textContent = 'Sending…';
         try {
           let convId = fwdRow.dataset.fwdConv;
           if (!convId) {
             const opened = await ipon().rpc('start_or_open_direct_chat', { p_target_id: fwdRow.dataset.fwdUser });
             convId = opened.id;
+            fwdRow.dataset.fwdConv = convId;
           }
           await ipon().rpc('send_chat_message', {
             p_conversation_id: convId,
@@ -8791,16 +8872,31 @@
             p_message_type: 'FORWARDED',
             p_forwarded_from_id: body.dataset.fwdMsgId
           });
-          dialog?.close();
-          ipon().toast('Message forwarded.');
-          await refreshConversations();
-        } catch (err) { ipon().toast(ipon().friendlyError(err), 'error'); }
+          fwdRow.dataset.fwdState = 'sent';
+          fwdRow.classList?.remove?.('is-sending');
+          fwdRow.classList?.add?.('is-sent');
+          fwdRow.setAttribute?.('aria-label', `Sent to ${targetName}`);
+          if (pill) pill.innerHTML = `${FWD_SENT_CHECK_SVG}<span>Sent</span>`;
+          if (!state.forwardSentKeys) state.forwardSentKeys = new Set();
+          state.forwardSentKeys.add(fwdKey);
+          updateForwardFooterCount(document.getElementById('msg-forward-status'), state.forwardSentKeys.size);
+          refreshConversations().catch(() => { });
+          if (convId && convId === state.activeConvId) {
+            openConversation(convId, { markRead: false, silent: true }).catch(() => { });
+          }
+        } catch (err) {
+          fwdRow.disabled = false;
+          fwdRow.dataset.fwdState = '';
+          fwdRow.classList?.remove?.('is-sending');
+          if (pill) pill.textContent = 'Send';
+          ipon().toast(ipon().friendlyError(err), 'error');
+        }
         return;
       }
 
       const shareRow = ev.target.closest?.('[data-share-send-user]');
       if (shareRow) {
-        const dialog = document.getElementById('msg-share-dialog');
+        if (shareRow.disabled || shareRow.dataset.shareState === 'sending' || shareRow.dataset.shareState === 'sent') return;
         const textEl = document.getElementById('msg-share-text');
         const errEl = document.getElementById('msg-share-text-err');
         const msgBody = String(textEl?.value || '').trim();
@@ -8814,31 +8910,43 @@
           textEl?.focus?.();
           return;
         }
-        if (shareRow.disabled) return;
         shareRow.disabled = true;
-        const pill = shareRow.querySelector('[data-share-btn-label]');
-        const prevLabel = pill ? pill.textContent : 'Send';
+        shareRow.dataset.shareState = 'sending';
+        shareRow.classList?.add?.('is-sending');
+        const pill = shareRow.querySelector?.('[data-share-btn-label]');
+        const targetName = shareRow.dataset.shareName || 'recipient';
+        const shareKey = shareRow.dataset.shareKey || `${shareRow.dataset.shareSendConv || ''}:${shareRow.dataset.shareSendUser || ''}`;
         if (pill) pill.textContent = 'Sending…';
         try {
           let convId = shareRow.dataset.shareSendConv;
           if (!convId) {
             const opened = await ipon().rpc('start_or_open_direct_chat', { p_target_id: shareRow.dataset.shareSendUser });
             convId = opened.id;
+            shareRow.dataset.shareSendConv = convId;
           }
           await ipon().rpc('send_chat_message', {
             p_conversation_id: convId,
             p_body: msgBody.slice(0, 2000),
             p_message_type: 'TEXT'
           });
-          dialog?.close();
-          ipon().toast('Shared to chat.');
-          await refreshConversations();
-          await openConversation(convId);
+          shareRow.dataset.shareState = 'sent';
+          shareRow.classList?.remove?.('is-sending');
+          shareRow.classList?.add?.('is-sent');
+          shareRow.setAttribute?.('aria-label', `Sent to ${targetName}`);
+          if (pill) pill.innerHTML = `${FWD_SENT_CHECK_SVG}<span>Sent</span>`;
+          if (!state.shareSentKeys) state.shareSentKeys = new Set();
+          state.shareSentKeys.add(shareKey);
+          updateForwardFooterCount(document.getElementById('msg-share-status'), state.shareSentKeys.size, 'Tap Send to share');
+          refreshConversations().catch(() => { });
+          if (convId && convId === state.activeConvId) {
+            openConversation(convId, { markRead: false, silent: true }).catch(() => { });
+          }
         } catch (err) {
-          ipon().toast(ipon().friendlyError(err), 'error');
-        } finally {
           shareRow.disabled = false;
-          if (pill) pill.textContent = prevLabel;
+          shareRow.dataset.shareState = '';
+          shareRow.classList?.remove?.('is-sending');
+          if (pill) pill.textContent = 'Send';
+          ipon().toast(ipon().friendlyError(err), 'error');
         }
         return;
       }
@@ -9184,6 +9292,16 @@
         if (fClear) fClear.hidden = !q;
         const fEmpty = document.getElementById('msg-friend-filter-empty');
         if (fEmpty) fEmpty.hidden = visibleCount > 0;
+      } else if (ev.target?.id === 'msg-forward-search') {
+        const q = String(ev.target.value || '').trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll('#msg-forward-list .msg-forward-row').forEach((row) => {
+          const hide = q ? !(row.dataset.fwdSearch || '').includes(q) : false;
+          row.hidden = hide;
+          if (!hide) visible += 1;
+        });
+        const emptyEl = document.getElementById('msg-forward-empty');
+        if (emptyEl) emptyEl.hidden = visible > 0;
       } else if (ev.target?.id === 'msg-share-search') {
         const q = String(ev.target.value || '').trim().toLowerCase();
         let visible = 0;

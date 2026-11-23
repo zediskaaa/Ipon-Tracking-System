@@ -517,6 +517,45 @@
     return info.aspect === 'portrait' ? 'Play Facebook Reel' : 'Play Facebook video';
   }
 
+  function formatCleanUrlDisplay(rawUrl) {
+    try {
+      const u = new URL(String(rawUrl || '').trim());
+      const host = u.hostname.replace(/^www\./i, '');
+      const cleanPath = u.pathname.replace(/\/+$/, '');
+      if ((host === 'youtube.com' || host === 'm.youtube.com') && u.searchParams.get('v')) {
+        return `${host}/watch?v=${u.searchParams.get('v')}`;
+      }
+      return `${host}${cleanPath}` || host;
+    } catch {
+      return String(rawUrl || '').trim().replace(/^https?:\/\//i, '').slice(0, 80);
+    }
+  }
+
+  function renderCompactLinkPreviewHtml(parsed, { caption = '' } = {}) {
+    if (!parsed || !PROVIDER_META[parsed.provider]) return '';
+    const cached = getCachedMeta(parsed.rawUrl);
+    const info = cached ? { ...parsed, ...cached } : parsed;
+    const iconSvg = PROVIDER_ICONS[info.provider] || '';
+    const safeThumb = isSafeThumbUrl(info.thumbnailUrl) ? info.thumbnailUrl : '';
+    const cleanUrl = formatCleanUrlDisplay(info.canonicalUrl || info.rawUrl);
+    const fallbackCaption = String(caption || '').replace(URL_TOKEN_RE, '').replace(/\s+/g, ' ').trim();
+    const titleText = info.title || fallbackCaption || info.badge || defaultTitleFor(info);
+    const subText = info.author ? `${info.author} · ${cleanUrl}` : cleanUrl;
+
+    return `<div class="msg-forward-preview is-social is-${escapeHtml(info.provider)}" data-social-compact="1" data-social-provider="${escapeHtml(info.provider)}" data-social-url="${escapeHtml(info.rawUrl)}">
+      <div class="msg-forward-thumb is-${escapeHtml(info.provider)}" aria-hidden="true">
+        <span class="msg-forward-thumb-fallback">${iconSvg}</span>
+        ${safeThumb ? `<img class="msg-forward-thumb-img" src="${escapeHtml(safeThumb)}" alt="" loading="eager" referrerpolicy="no-referrer">` : ''}
+        <span class="msg-forward-thumb-play">${PLAY_SVG}</span>
+      </div>
+      <div class="msg-forward-preview-copy">
+        <span class="msg-forward-preview-kicker is-${escapeHtml(info.provider)}">${iconSvg}<span>${escapeHtml(info.badge)}</span></span>
+        <strong class="msg-forward-preview-title" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</strong>
+        <small class="msg-forward-preview-sub" title="${escapeHtml(cleanUrl)}">${escapeHtml(subText)}</small>
+      </div>
+    </div>`;
+  }
+
   function renderSocialEmbedCardHtml(parsed, { compact = false } = {}) {
     if (!parsed || !PROVIDER_META[parsed.provider]) return '';
     const cached = getCachedMeta(parsed.rawUrl);
@@ -854,8 +893,71 @@
     return true;
   }
 
+  function bindCompactThumbFallback(img) {
+    if (!img || img.dataset?.thumbFallbackBound) return;
+    if (img.dataset) img.dataset.thumbFallbackBound = '1';
+    img.addEventListener?.('error', () => { img.remove?.(); }, { once: true });
+  }
+
+  function applyCompactMeta(card, meta) {
+    if (!card || !meta) return;
+    const titleEl = card.querySelector?.('.msg-forward-preview-title');
+    const subEl = card.querySelector?.('.msg-forward-preview-sub');
+    const kickerTextEl = card.querySelector?.('.msg-forward-preview-kicker span');
+    const cleanUrl = formatCleanUrlDisplay(meta.canonicalUrl || meta.rawUrl || card.dataset?.socialUrl || '');
+    if (meta.title && titleEl) {
+      titleEl.textContent = meta.title;
+      titleEl.setAttribute?.('title', meta.title);
+    }
+    if (subEl && cleanUrl) {
+      const subText = meta.author ? `${meta.author} · ${cleanUrl}` : cleanUrl;
+      subEl.textContent = subText;
+      subEl.setAttribute?.('title', cleanUrl);
+    }
+    if (meta.badge && kickerTextEl) kickerTextEl.textContent = meta.badge;
+    if (meta.thumbnailUrl && isSafeThumbUrl(meta.thumbnailUrl)) {
+      const thumbWrap = card.querySelector?.('.msg-forward-thumb');
+      if (thumbWrap && !thumbWrap.querySelector?.('.msg-forward-thumb-img') && typeof document !== 'undefined') {
+        const img = document.createElement('img');
+        img.className = 'msg-forward-thumb-img';
+        img.src = meta.thumbnailUrl;
+        img.alt = '';
+        img.loading = 'eager';
+        img.referrerPolicy = 'no-referrer';
+        bindCompactThumbFallback(img);
+        const playEl = thumbWrap.querySelector?.('.msg-forward-thumb-play');
+        if (playEl && typeof thumbWrap.insertBefore === 'function') {
+          thumbWrap.insertBefore(img, playEl);
+        } else {
+          thumbWrap.appendChild?.(img);
+        }
+      }
+    }
+  }
+
   function hydrateVisibleSocialMeta(containerEl, invokeResolveFn) {
     if (!containerEl || typeof invokeResolveFn !== 'function') return;
+    containerEl.querySelectorAll?.('.msg-forward-thumb-img').forEach(bindCompactThumbFallback);
+
+    const compactCards = containerEl.querySelectorAll?.('[data-social-compact="1"]');
+    if (compactCards && compactCards.length) {
+      const compactSeen = new Set();
+      compactCards.forEach((card) => {
+        const rawUrl = card.dataset?.socialUrl || '';
+        if (!rawUrl || compactSeen.has(rawUrl)) return;
+        const cached = getCachedMeta(rawUrl);
+        if (cached) {
+          applyCompactMeta(card, cached);
+          return;
+        }
+        compactSeen.add(rawUrl);
+        resolveSocialEmbed(rawUrl, invokeResolveFn).then((meta) => {
+          if (!meta || card.isConnected === false) return;
+          applyCompactMeta(card, meta);
+        }).catch(() => { });
+      });
+    }
+
     const cards = containerEl.querySelectorAll?.('[data-social-embed="1"]');
     if (!cards || !cards.length) return;
     const seen = new Set();
@@ -1003,6 +1105,8 @@
     getCachedMeta,
     resolveSocialEmbed,
     renderSocialEmbedCardHtml,
+    renderCompactLinkPreviewHtml,
+    formatCleanUrlDisplay,
     renderSocialEmbedsBlockHtml,
     activateSocialPlayer,
     maximizeSocialVideo,
