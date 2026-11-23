@@ -1497,10 +1497,10 @@ html {
 .l-prev-group-select-wrap select {
   width: 100%;
   min-height: 32px;
-  padding: 5px 8px;
+  padding: 5px 36px 5px 8px;
   border: 1px solid rgba(20, 45, 43, 0.2);
   border-radius: 8px;
-  background: #fcf9f2;
+  background-color: #fcf9f2;
   color: var(--ink);
   font: 700 11.5px/1.2 Arial, sans-serif;
   cursor: pointer;
@@ -2368,7 +2368,7 @@ html[data-theme="dark"] .l-otp-cell {
   color: var(--ink);
 }
 html[data-theme="dark"] .l-prev-group-select-wrap select {
-  background: #0d1a16;
+  background-color: #0d1a16;
   border-color: rgba(218, 236, 227, 0.22);
   color: var(--ink);
 }

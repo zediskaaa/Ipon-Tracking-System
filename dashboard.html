@@ -16,9 +16,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261123-21">
-  <link rel="stylesheet" href="css/hero-plates.css?v=20261123-02">
-  <link rel="stylesheet" href="css/tutorial.css?v=20261120-05">
+  <link rel="stylesheet" href="css/app.css?v=20261123-22">
+  <link rel="stylesheet" href="css/hero-plates.css?v=20261123-04">
+  <link rel="stylesheet" href="css/tutorial.css?v=20261123-01">
   <script src="js/config.js?v=20261123-01"></script>
 </head>
 
@@ -218,43 +218,59 @@
             <a class="dashboard-wallet-link" href="reports.html#wallet-reconciliation">Reconcile</a>
           </div>
         </div>
-        <dl class="summary-breakdown" data-region="summary-breakdown">
-          <div class="breakdown-tile">
-            <i class="status-icon confirmed" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m7 12 3 3 7-7" />
-                </svg></i>
-            <div class="breakdown-tile-copy">
-              <dt>Additions <span>(confirmed)</span></dt>
-              <dd>—</dd>
+        <dl class="summary-breakdown" data-region="summary-breakdown" aria-label="Savings breakdown">
+          <div class="breakdown-tile is-addition is-zero" data-summary-tile="additions" aria-label="Additions: Loading">
+            <div class="breakdown-tile-top">
+              <i class="status-icon confirmed" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg></i>
+              <div class="breakdown-tile-copy">
+                <dt>Additions <span>confirmed</span></dt>
+              </div>
             </div>
+            <dd class="breakdown-tile-val" data-no-cents-format="1">—</dd>
+            <div class="breakdown-tile-bar" aria-hidden="true"><b></b></div>
+            <div class="breakdown-tile-meta">Loading…</div>
           </div>
-          <div class="breakdown-tile">
-            <i class="status-icon deduction" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M7 12h10" />
-                </svg></i>
-            <div class="breakdown-tile-copy">
-              <dt>Deductions <span>(confirmed)</span></dt>
-              <dd>—</dd>
+          <div class="breakdown-tile is-deduction is-zero" data-summary-tile="deductions" aria-label="Deductions: Loading">
+            <div class="breakdown-tile-top">
+              <i class="status-icon deduction" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 12h12" />
+                  </svg></i>
+              <div class="breakdown-tile-copy">
+                <dt>Deductions <span>confirmed</span></dt>
+              </div>
             </div>
+            <dd class="breakdown-tile-val" data-no-cents-format="1">—</dd>
+            <div class="breakdown-tile-bar" aria-hidden="true"><b></b></div>
+            <div class="breakdown-tile-meta">Loading…</div>
           </div>
-          <div class="breakdown-tile">
-            <i class="status-icon expense" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m6 6 12 12M18 6 6 18" />
-                </svg></i>
-            <div class="breakdown-tile-copy">
-              <dt>Expenses</dt>
-              <dd>—</dd>
+          <div class="breakdown-tile is-expense is-zero" data-summary-tile="expenses" aria-label="Expenses: Loading">
+            <div class="breakdown-tile-top">
+              <i class="status-icon expense" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg></i>
+              <div class="breakdown-tile-copy">
+                <dt>Expenses</dt>
+              </div>
             </div>
+            <dd class="breakdown-tile-val" data-no-cents-format="1">—</dd>
+            <div class="breakdown-tile-bar" aria-hidden="true"><b></b></div>
+            <div class="breakdown-tile-meta">Loading…</div>
           </div>
-          <div class="breakdown-tile">
-            <i class="status-icon pending" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg></i>
-            <div class="breakdown-tile-copy">
-              <dt>Pending <span>(for review)</span></dt>
-              <dd>—</dd>
+          <div class="breakdown-tile is-pending is-zero" data-summary-tile="pending" aria-label="Pending: Loading">
+            <div class="breakdown-tile-top">
+              <i class="status-icon pending" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8.5" />
+                    <path d="M12 7.5V12l3 2" />
+                  </svg></i>
+              <div class="breakdown-tile-copy">
+                <dt>Pending <span>for review</span></dt>
+              </div>
             </div>
+            <dd class="breakdown-tile-val" data-no-cents-format="1">—</dd>
+            <div class="breakdown-tile-bar" aria-hidden="true"><b></b></div>
+            <div class="breakdown-tile-meta">Loading…</div>
           </div>
         </dl>
         <dl class="admin-progress" aria-label="Monthly member progress">
@@ -374,13 +390,6 @@
                 type="button">Today</button><button class="jump-confirm-button" type="submit">View month</button></div>
           </form>
         </dialog>
-
-        <div class="calendar-legend" aria-label="Calendar activity legend">
-          <span><i class="status-icon confirmed" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg></i>Additions</span>
-          <span><i class="status-icon deduction" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 12h10"/></svg></i>Deductions</span>
-          <span><i class="status-icon expense" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></i>Expenses</span>
-          <span><i class="status-icon pending" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i>Pending</span>
-        </div>
 
         <div class="calendar-board">
           <div class="weekday-headings" data-region="weekday-headings" aria-hidden="true">
@@ -1052,7 +1061,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/dashboard.js?v=20261123-02"></script>
+  <script src="js/dashboard.js?v=20261123-03"></script>
 </body>
 
 </html>

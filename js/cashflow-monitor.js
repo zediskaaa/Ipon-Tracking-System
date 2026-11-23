@@ -52,26 +52,20 @@
   const rateDisplayEl = document.getElementById('cf-rate-display');
   const rateOpenBtn = document.getElementById('cf-rate-open-btn');
 
-  const heroCard = document.getElementById('cf-hero-card');
   const healthBadge = document.getElementById('cf-health-badge');
   const healthText = document.getElementById('cf-health-text');
-  const heroNetEl = document.getElementById('cf-hero-net');
-  const heroFormulaEl = document.getElementById('cf-hero-formula');
-  const meterPctEl = document.getElementById('cf-meter-pct');
   const meterTrackEl = document.getElementById('cf-meter-track');
   const meterFillEl = document.getElementById('cf-meter-fill');
-  const meterCaptionEl = document.getElementById('cf-meter-caption');
-  const heroGrossEl = document.getElementById('cf-hero-gross');
-  const heroMandatoryEl = document.getElementById('cf-hero-mandatory');
-  const heroMandatoryLabelEl = document.getElementById('cf-hero-mandatory-label');
 
   const kpiAvailableEl = document.getElementById('cf-kpi-available');
   const kpiAvailableSubEl = document.getElementById('cf-kpi-available-sub');
   const kpiExpensesEl = document.getElementById('cf-kpi-expenses');
   const kpiExpensesSubEl = document.getElementById('cf-kpi-expenses-sub');
+  const kpiNetCard = document.getElementById('cf-kpi-net-card');
   const kpiNetEl = document.getElementById('cf-kpi-net');
   const kpiNetSubEl = document.getElementById('cf-kpi-net-sub');
 
+  const segmentedEl = document.getElementById('cf-segmented');
   const segIncomeBtn = document.getElementById('cf-seg-income');
   const segExpenseBtn = document.getElementById('cf-seg-expense');
   const segIncomeTotalEl = document.getElementById('cf-seg-income-total');
@@ -93,10 +87,14 @@
 
   const expTotalEl = document.getElementById('cf-exp-total');
   const expTotalSubEl = document.getElementById('cf-exp-total-sub');
-  const expCountEl = document.getElementById('cf-exp-count');
-  const expCountSubEl = document.getElementById('cf-exp-count-sub');
+  const expRemainingCard = document.getElementById('cf-exp-remaining-card');
   const expRemainingEl = document.getElementById('cf-exp-remaining');
   const expRemainingSubEl = document.getElementById('cf-exp-remaining-sub');
+  const expShareCard = document.getElementById('cf-exp-share-card');
+  const expSharePctEl = document.getElementById('cf-exp-share-pct');
+  const expShareBarEl = document.getElementById('cf-exp-share-bar');
+  const expShareFillEl = document.getElementById('cf-exp-share-fill');
+  const expShareSubEl = document.getElementById('cf-exp-share-sub');
   const expSearchInput = document.getElementById('cf-expense-search');
   const expCatFilter = document.getElementById('cf-expense-cat-filter');
   const addExpenseBtn = document.getElementById('cf-add-expense-btn');
@@ -175,6 +173,31 @@
     if (!el) return;
     const text = String(formattedText || '');
     el.innerHTML = formatMoneyWithSmallCentsHtml(text);
+  }
+
+  function setCardMoneyDisplay(el, value, { signed = false, forceMinus = false } = {}) {
+    if (!el) return;
+    const num = roundCentavos(value);
+    const isNeg = forceMinus || (signed && num < 0);
+    const abs = Math.abs(num);
+    const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const [whole, cents] = formatted.split('.');
+    const digitCount = whole.replace(/,/g, '').length;
+    const lenTier = digitCount <= 4 ? 'sm' : digitCount <= 7 ? 'md' : digitCount <= 10 ? 'lg' : 'xl';
+    if (el.dataset) el.dataset.valLen = lenTier;
+    const prefix = isNeg ? '−₱' : '₱';
+    el.innerHTML = `<i>${prefix}</i><span class="cf-val-whole">${Ipon.escapeHtml(whole)}</span><span class="cf-cents">.${Ipon.escapeHtml(cents)}</span>`;
+  }
+
+  function setProgressWidth(el, pct) {
+    if (!el || !el.style) return;
+    const clamped = Math.min(100, Math.max(0, Number(pct) || 0));
+    if (typeof el.style.setProperty === 'function') {
+      el.style.setProperty('--w', `${clamped}%`);
+    } else {
+      el.style['--w'] = `${clamped}%`;
+    }
+    el.style.width = `${clamped}%`;
   }
 
   function formatCompactPeso(value) {
@@ -318,10 +341,18 @@
 
   function applySubView(view, { persist = true } = {}) {
     activeView = view === 'expense' ? 'expense' : 'income';
-    if (segIncomeBtn) segIncomeBtn.setAttribute('aria-selected', activeView === 'income' ? 'true' : 'false');
-    if (segExpenseBtn) segExpenseBtn.setAttribute('aria-selected', activeView === 'expense' ? 'true' : 'false');
-    if (incomePanel) incomePanel.hidden = activeView !== 'income';
-    if (expensePanel) expensePanel.hidden = activeView !== 'expense';
+    const isExpense = activeView === 'expense';
+    if (segmentedEl?.dataset) segmentedEl.dataset.t = isExpense ? '1' : '0';
+    if (segIncomeBtn) {
+      segIncomeBtn.setAttribute('aria-selected', isExpense ? 'false' : 'true');
+      segIncomeBtn.setAttribute('tabindex', isExpense ? '-1' : '0');
+    }
+    if (segExpenseBtn) {
+      segExpenseBtn.setAttribute('aria-selected', isExpense ? 'true' : 'false');
+      segExpenseBtn.setAttribute('tabindex', isExpense ? '0' : '-1');
+    }
+    if (incomePanel) incomePanel.hidden = isExpense;
+    if (expensePanel) expensePanel.hidden = !isExpense;
     if (persist) {
       try { sessionStorage.setItem(VIEW_STORAGE_KEY, activeView); } catch { }
     }
@@ -356,58 +387,44 @@
     const expenses = Number(t.total_expenses || 0);
     const net = Number(t.net_income || 0);
     const ratio = Number(t.spent_ratio_pct || 0);
+    const ratioLabel = Number.isInteger(ratio) ? String(ratio) : ratio.toFixed(1).replace(/\.0$/, '');
     const isDeficit = net < 0;
     const isWarn = !isDeficit && available > 0 && ratio >= 80;
+    const monthName = monthLabel(selectedYear, selectedMonth);
 
     if (rateDisplayEl) rateDisplayEl.textContent = pctLabel;
-    if (heroMandatoryLabelEl) heroMandatoryLabelEl.textContent = `Mandatory savings (${pctLabel})`;
-    setMoneyDisplay(heroGrossEl, Ipon.money(gross));
-    setMoneyDisplay(heroMandatoryEl, `−${Ipon.money(mandatory)}`);
-
-    if (heroCard) heroCard.classList.toggle('is-deficit', isDeficit);
     if (healthBadge) {
       healthBadge.classList.toggle('is-deficit', isDeficit);
       healthBadge.classList.toggle('is-warn', isWarn);
     }
     if (healthText) {
       if (isDeficit) healthText.textContent = `Over available income by ${Ipon.money(Math.abs(net))}`;
-      else if (gross <= 0 && expenses <= 0) healthText.textContent = `Ready to track ${monthLabel(selectedYear, selectedMonth)}`;
-      else if (isWarn) healthText.textContent = `Nearing spending limit (${ratio}% used)`;
+      else if (gross <= 0 && expenses <= 0) healthText.textContent = `Ready to track ${monthName}`;
+      else if (isWarn) healthText.textContent = `Nearing spending limit (${ratioLabel}% used)`;
       else healthText.textContent = 'Spending within available income';
     }
 
-    setMoneyDisplay(heroNetEl, formatSignedMoney(net));
-    if (heroFormulaEl) {
-      heroFormulaEl.textContent = `Available Income (${Ipon.money(available)}) − Expenses (${Ipon.money(expenses)})`;
-    }
-
     const fillWidth = Math.min(100, Math.max(0, ratio));
-    if (meterPctEl) meterPctEl.textContent = `${ratio}%`;
     if (meterTrackEl) meterTrackEl.setAttribute('aria-valuenow', String(Math.round(fillWidth)));
     if (meterFillEl) {
-      meterFillEl.style.width = `${fillWidth}%`;
+      setProgressWidth(meterFillEl, fillWidth);
       meterFillEl.classList.toggle('is-deficit', isDeficit);
       meterFillEl.classList.toggle('is-warn', isWarn);
     }
-    if (meterCaptionEl) {
-      if (available <= 0 && expenses <= 0) {
-        meterCaptionEl.textContent = `Add your monthly income sources first — ${pctLabel} is set aside automatically for savings.`;
-      } else if (isDeficit) {
-        meterCaptionEl.textContent = `Monthly expenses exceed your available income by ${Ipon.money(Math.abs(net))}. Review non-essential categories below.`;
-      } else {
-        meterCaptionEl.textContent = `You have spent ${Ipon.money(expenses)} of ${Ipon.money(available)} available, leaving ${Ipon.money(net)} net income.`;
-      }
-    }
 
-    setMoneyDisplay(kpiAvailableEl, Ipon.money(available));
-    if (kpiAvailableSubEl) kpiAvailableSubEl.textContent = `Gross ${Ipon.money(gross)} − ${pctLabel} savings (${Ipon.money(mandatory)})`;
-    setMoneyDisplay(kpiExpensesEl, Ipon.money(expenses));
+    // Top 3 KPI Summary Cards
+    setCardMoneyDisplay(kpiAvailableEl, available);
+    if (kpiAvailableSubEl) {
+      kpiAvailableSubEl.innerHTML = `Gross <b>${Ipon.escapeHtml(Ipon.money(gross))}</b> − ${Ipon.escapeHtml(pctLabel)} savings (${Ipon.escapeHtml(Ipon.money(mandatory))})`;
+    }
+    setCardMoneyDisplay(kpiExpensesEl, expenses);
     if (kpiExpensesSubEl) {
       const count = Number(t.expense_count || 0);
-      kpiExpensesSubEl.textContent = `${count} recorded expense${count === 1 ? '' : 's'} · ${ratio}% of available`;
+      kpiExpensesSubEl.textContent = `${count} recorded expense${count === 1 ? '' : 's'} · ${ratioLabel}% of available`;
     }
+    if (kpiNetCard) kpiNetCard.classList.toggle('is-deficit', isDeficit);
     if (kpiNetEl) {
-      setMoneyDisplay(kpiNetEl, formatSignedMoney(net));
+      setCardMoneyDisplay(kpiNetEl, net, { signed: true });
       kpiNetEl.classList.toggle('is-negative', isDeficit);
       kpiNetEl.classList.toggle('is-positive', net > 0);
     }
@@ -417,41 +434,57 @@
         : 'Available monthly income minus expenses';
     }
 
-    // Immediate visible totals directly inside the switcher & active view summaries
-    setMoneyDisplay(segIncomeTotalEl, Ipon.money(available));
+    // Live peso totals inside the sliding 2-tab switcher (Gross income & Total expenses)
+    setMoneyDisplay(segIncomeTotalEl, Ipon.money(gross));
     setMoneyDisplay(segExpenseTotalEl, Ipon.money(expenses));
 
-    setMoneyDisplay(incGrossEl, Ipon.money(gross));
+    // Income Monitoring Tab: 3 breakdown cards
+    setCardMoneyDisplay(incGrossEl, gross);
     if (incGrossSubEl) {
       const c = Number(t.income_count || 0);
-      incGrossSubEl.textContent = `${c} income source${c === 1 ? '' : 's'} in ${monthLabel(selectedYear, selectedMonth)}`;
+      incGrossSubEl.textContent = `${c} income source${c === 1 ? '' : 's'} in ${monthName}`;
     }
-    if (incSavingsLabelEl) incSavingsLabelEl.textContent = `Less: Mandatory Savings (${pctLabel})`;
-    setMoneyDisplay(incSavingsEl, `−${Ipon.money(mandatory)}`);
+    if (incSavingsLabelEl) incSavingsLabelEl.textContent = `Less: mandatory savings (${pctLabel})`;
+    setCardMoneyDisplay(incSavingsEl, mandatory, { forceMinus: true });
     if (incSavingsSubEl) incSavingsSubEl.textContent = `Automatically deducted (${pctLabel} of gross income)`;
-    setMoneyDisplay(incAvailableEl, Ipon.money(available));
+    setCardMoneyDisplay(incAvailableEl, available);
 
-    setMoneyDisplay(expTotalEl, Ipon.money(expenses));
-    if (expTotalSubEl) expTotalSubEl.textContent = `${ratio}% of ${Ipon.money(available)} available income`;
-    if (expCountEl) {
-      const c = Number(t.expense_count || 0);
-      expCountEl.textContent = `${c} ${c === 1 ? 'expense' : 'expenses'}`;
-    }
+    // Expense Monitoring Tab: 3 summary cards matching the same design language
+    const expCount = Number(t.expense_count || 0);
     const topCat = Array.isArray(data?.expense_breakdown) && data.expense_breakdown.length ? data.expense_breakdown[0] : null;
-    if (expCountSubEl) {
-      expCountSubEl.textContent = topCat
-        ? `Top: ${topCat.category} (${Ipon.money(topCat.total)})`
-        : `No expenses logged for ${monthLabel(selectedYear, selectedMonth)}`;
+    setCardMoneyDisplay(expTotalEl, expenses);
+    if (expTotalSubEl) {
+      const baseNote = `${expCount} recorded in ${monthName}`;
+      expTotalSubEl.textContent = topCat
+        ? `${baseNote} · Top: ${topCat.category} (${Ipon.money(topCat.total)})`
+        : baseNote;
     }
+    if (expRemainingCard) expRemainingCard.classList.toggle('is-deficit', isDeficit);
     if (expRemainingEl) {
-      setMoneyDisplay(expRemainingEl, formatSignedMoney(net));
+      setCardMoneyDisplay(expRemainingEl, net, { signed: true });
       expRemainingEl.classList.toggle('is-negative', isDeficit);
       expRemainingEl.classList.toggle('is-positive', net > 0);
     }
     if (expRemainingSubEl) {
       expRemainingSubEl.textContent = isDeficit
         ? `Over available income by ${Ipon.money(Math.abs(net))}`
-        : 'Net monthly income remaining';
+        : 'Available income minus expenses';
+    }
+    if (expShareCard) expShareCard.classList.toggle('is-deficit', isDeficit);
+    if (expSharePctEl) {
+      expSharePctEl.innerHTML = `${Ipon.escapeHtml(ratioLabel)}<i>%</i>`;
+      expSharePctEl.classList.toggle('is-negative', isDeficit);
+    }
+    if (expShareBarEl) expShareBarEl.setAttribute('aria-valuenow', String(Math.round(fillWidth)));
+    if (expShareFillEl) {
+      setProgressWidth(expShareFillEl, fillWidth);
+      expShareFillEl.classList.toggle('is-deficit', isDeficit);
+      expShareFillEl.classList.toggle('is-warn', isWarn);
+    }
+    if (expShareSubEl) {
+      if (available <= 0 && expenses > 0) expShareSubEl.textContent = 'No available income recorded yet';
+      else if (isDeficit) expShareSubEl.textContent = 'Exceeds available monthly income';
+      else expShareSubEl.textContent = 'Of your available monthly income';
     }
   }
 
@@ -976,6 +1009,12 @@
       renderAll(monitorData);
     } catch (error) {
       if (seq !== loadSeq) return;
+      if (!monitorData) {
+        if (healthText) healthText.textContent = 'Monitor unavailable';
+        [kpiAvailableSubEl, kpiExpensesSubEl, incGrossSubEl, expTotalSubEl].forEach((el) => {
+          if (el) el.textContent = 'Unable to load monthly data';
+        });
+      }
       Ipon.showInlineError(errorSlot, error, loadMonitor);
     }
   }
@@ -997,6 +1036,17 @@
 
   segIncomeBtn?.addEventListener('click', () => applySubView('income'));
   segExpenseBtn?.addEventListener('click', () => applySubView('expense'));
+
+  function handleSegKeydown(event) {
+    const key = event?.key;
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+    event.preventDefault();
+    const goExpense = key === 'End' || (key !== 'Home' && activeView === 'income');
+    applySubView(goExpense ? 'expense' : 'income');
+    (goExpense ? segExpenseBtn : segIncomeBtn)?.focus?.();
+  }
+  segIncomeBtn?.addEventListener('keydown', handleSegKeydown);
+  segExpenseBtn?.addEventListener('keydown', handleSegKeydown);
 
   prevMonthBtn?.addEventListener('click', () => shiftMonth(-1));
   nextMonthBtn?.addEventListener('click', () => shiftMonth(1));

@@ -391,18 +391,21 @@ html[data-theme="dark"] .no-group-tutorial-btn:hover {
   min-width: 0;
 }
 
-.tutorial-cat-select {
+.tutorial-cat-select,
+select.tutorial-cat-select:not(.custom-select-native) {
   width: 100%;
   min-height: 44px;
   padding: 9px 38px 9px 14px;
+  padding-right: 38px !important;
   border: 1px solid rgba(20, 45, 43, .16);
   border-radius: 12px;
   background-color: #ffffff;
-  background-image: none;
+  background-image: none !important;
   color: var(--ink, #142d2b);
   font: 700 13.5px/1.25 Arial, sans-serif;
-  appearance: none;
-  -webkit-appearance: none;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
   cursor: pointer;
   box-sizing: border-box;
   transition: border-color .15s ease, box-shadow .15s ease;
@@ -1373,7 +1376,6 @@ html[data-theme="dark"] .tutorial-body {
 }
 
 html[data-theme="dark"] .tutorial-search-input,
-html[data-theme="dark"] .tutorial-cat-select,
 html[data-theme="dark"] .tutorial-cat-pill,
 html[data-theme="dark"] .tutorial-card,
 html[data-theme="dark"] .tutorial-back-btn,
@@ -1384,6 +1386,13 @@ html[data-theme="dark"] .tutorial-visual-body {
   background: #13261f;
   border-color: rgba(218, 236, 227, .14);
   color: #edf5f0;
+}
+
+html[data-theme="dark"] select.tutorial-cat-select:not(.custom-select-native) {
+  background-color: #13261f !important;
+  background-image: none !important;
+  border-color: rgba(218, 236, 227, .14) !important;
+  color: #edf5f0 !important;
 }
 
 html[data-theme="dark"] .tutorial-cat-select-chevron {

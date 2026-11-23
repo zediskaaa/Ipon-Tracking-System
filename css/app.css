@@ -1274,7 +1274,8 @@ input::-ms-reveal,input::-ms-clear{display:none!important}
 .account-summary-pill{display:flex;flex-direction:column;gap:2px;padding:10px 14px;background:#f3ede4;border-radius:8px;border:1px solid rgba(20,45,43,.12);}.account-summary-pill strong{font-size:14px;color:#163029;}.account-summary-pill small{font-size:12px;color:#5a6862;}.button-danger{background:#a62b24 !important;color:#fff !important;border:none !important;}.button-danger:hover{background:#8a211b !important;}
 
 /* Universal High-End Select, Dropdown & Search Input Styling */
-select:not(.custom-select-native){appearance:none;-webkit-appearance:none;-moz-appearance:none;min-height:42px;padding:9px 36px 9px 14px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%23144534' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px 16px;padding-right:36px!important;font:600 13.5px/1.3 Arial,sans-serif!important;color:var(--ink)!important;border:1.5px solid rgba(20,45,43,.16)!important;border-radius:12px!important;background-color:#ffffff!important;box-shadow:0 1px 2px rgba(15,40,30,.04);box-sizing:border-box;transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;cursor:pointer}
+select:not(.custom-select-native){appearance:none!important;-webkit-appearance:none!important;-moz-appearance:none!important;min-height:42px;padding:9px 36px 9px 14px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%23144534' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-position:right 12px center!important;background-size:16px 16px!important;padding-right:36px!important;font:600 13.5px/1.3 Arial,sans-serif!important;color:var(--ink)!important;border:1.5px solid rgba(20,45,43,.16)!important;border-radius:12px!important;background-color:#ffffff!important;box-shadow:0 1px 2px rgba(15,40,30,.04);box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;cursor:pointer}
+select:not(.custom-select-native)::-ms-expand{display:none}
 select:not(.custom-select-native):hover{border-color:rgba(20,45,43,.34)!important;background-color:#fafdfb!important}
 select:not(.custom-select-native):focus{border-color:#1f6a43!important;background-color:#ffffff!important;box-shadow:0 0 0 3.5px rgba(31,106,67,.15)!important;outline:none}
 input[type="search"]:not(.effects-find):not(.tutorial-search-input),.table-filters input[type="search"],.field input[type="search"]{appearance:none;-webkit-appearance:none;min-height:42px;padding:9px 14px 9px 38px;border:1.5px solid rgba(20,45,43,.16);border-radius:12px;background-color:#ffffff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='11' cy='11' r='7' stroke='%23566d64' stroke-width='2'/%3E%3Cpath d='m20 20-3.5-3.5' stroke='%23566d64' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center;background-size:16px 16px;color:var(--ink);font:500 13.5px/1.35 Arial,sans-serif;box-shadow:0 1px 2px rgba(15,40,30,.04);box-sizing:border-box;transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease}
@@ -1287,18 +1288,18 @@ input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;appea
 
 /* Custom Member Dropdown with Avatars (DPs) */
 .custom-member-select-wrap{position:relative;width:100%;display:block;user-select:none}
-.custom-select-native{position:absolute!important;opacity:0!important;width:1px!important;height:1px!important;pointer-events:none!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;border:0!important;padding:0!important;margin:-1px!important}
+.custom-select-native{position:absolute!important;opacity:0!important;width:1px!important;height:1px!important;min-width:0!important;min-height:0!important;max-width:1px!important;max-height:1px!important;pointer-events:none!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;appearance:none!important;-webkit-appearance:none!important;-moz-appearance:none!important;background:transparent!important;background-image:none!important;border:0!important;padding:0!important;margin:-1px!important}
 .custom-select-trigger{width:100%;min-height:44px;padding:6px 12px 6px 8px;border:1px solid rgba(20,45,43,.18);border-radius:12px;background:#ffffff;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;text-align:left;font:700 13.5px/1.3 Arial,sans-serif;box-shadow:0 1px 3px rgba(20,45,43,.05);transition:border-color .15s ease,box-shadow .15s ease,background-color .15s ease;outline:none;box-sizing:border-box}
 .custom-select-trigger:hover{border-color:rgba(20,45,43,.34);background-color:#fafdfb}
 .custom-member-select-wrap.is-open .custom-select-trigger,.custom-select-trigger:focus-visible{border-color:#287a4c;box-shadow:0 0 0 3px rgba(40,122,76,.14);background-color:#ffffff}
 .custom-select-trigger.has-error{border-color:var(--red)!important;box-shadow:0 0 0 2px rgba(174,57,52,.18)!important}
-.custom-select-selection{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.custom-select-selection{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;overflow:hidden}
 .custom-select-trigger-avatar{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px}
 .custom-select-trigger-avatar .avatar-circle{width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;border:1.5px solid #ffffff;box-shadow:0 1px 3px rgba(0,0,0,.12);display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:#e8f3ec;color:#17543a}
 .custom-select-trigger-avatar .avatar-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 .custom-avatar-placeholder{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(20,45,43,.08);color:#52675f}
 .custom-avatar-placeholder svg{width:16px;height:16px;fill:currentColor}
-.custom-select-trigger-label{font:700 13.5px/1.3 Arial,sans-serif;color:#112622;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.custom-select-trigger-label{min-width:0;font:700 13.5px/1.3 Arial,sans-serif;color:#112622;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .custom-select-trigger-label.is-placeholder{color:#64748b;font-weight:500}
 .custom-select-chevron{width:16px;height:16px;color:#174534;flex:0 0 16px;transition:transform .2s ease}
 .custom-member-select-wrap.is-open .custom-select-chevron{transform:rotate(180deg)}
@@ -3575,13 +3576,15 @@ html[data-theme="dark"] .wallet-count-input,
 html[data-theme="dark"] .record-thread-composer textarea {
   border-color: rgba(218, 236, 227, .22) !important;
   background-color: var(--surface-input) !important;
-  background: var(--surface-input);
   color: var(--ink) !important;
 }
 html[data-theme="dark"] select:not(.custom-select-native) {
   border-color: rgba(218, 236, 227, .2) !important;
   background-color: var(--surface-input) !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%239ee6be' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%239ee6be' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 16px 16px !important;
   color: var(--ink) !important;
 }
 html[data-theme="dark"] select:not(.custom-select-native):hover {
@@ -3632,7 +3635,7 @@ html[data-theme="dark"] .field input[type="search"]:focus {
 html[data-theme="dark"] .field input:not([type="checkbox"]):not([type="radio"]):disabled,
 html[data-theme="dark"] .data-table select:disabled {
   border-color: rgba(218, 236, 227, .12) !important;
-  background: rgba(255, 255, 255, .04) !important;
+  background-color: rgba(255, 255, 255, .04) !important;
   color: var(--muted) !important;
 }
 html[data-theme="dark"] ::placeholder {
@@ -3653,7 +3656,7 @@ html[data-theme="dark"] .data-table select[aria-invalid="true"],
 html[data-theme="dark"] .wallet-count-input.is-invalid,
 html[data-theme="dark"] .wallet-count-input[aria-invalid="true"] {
   border-color: #f17d75 !important;
-  background: #2b1414 !important;
+  background-color: #2b1414 !important;
   color: #ffdfdc !important;
 }
 html[data-theme="dark"] .field-help,
@@ -4163,7 +4166,7 @@ html[data-theme="dark"] .account-inline-form .button,
 html[data-theme="dark"] .account-support .button,
 html[data-theme="dark"] .mfa-settings > [data-mfa-enroll] {
   border-color: var(--rule);
-  background: var(--surface-input);
+  background-color: var(--surface-input);
   color: var(--ink);
 }
 html[data-theme="dark"] .account-inline-form .button:hover,
@@ -9075,7 +9078,7 @@ html[data-theme="dark"] .budget-modal-dialog textarea {
   padding: 8px 12px;
   border-radius: 11px;
   border: 1px solid #dfd6c6;
-  background: #ffffff;
+  background-color: #ffffff;
   color: #132a20;
   font: 500 14px/1.35 Arial, sans-serif;
   box-shadow: none;
@@ -13319,17 +13322,24 @@ html[data-theme="dark"] .notification-item-icon.is-effect-granted {
   text-transform: uppercase;
   pointer-events: none;
 }
-.effects-category-field > select {
-  appearance: none;
+.effects-category-field > select:not(.custom-select-native),
+html[data-theme="dark"] .effects-category-field > select:not(.custom-select-native) {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
   width: 100%;
   height: 100%;
+  min-height: 0;
   padding: 14px 34px 0 12px;
-  border: 0;
-  border-radius: inherit;
+  padding-right: 34px !important;
+  border: 0 !important;
+  border-radius: inherit !important;
   outline: 0;
-  background: transparent;
-  color: #f2f5f3;
-  font: 700 13px/1.2 Inter, system-ui, sans-serif;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #f2f5f3 !important;
+  font: 700 13px/1.2 Inter, system-ui, sans-serif !important;
+  box-shadow: none !important;
   cursor: pointer;
 }
 .effects-category-field > select option {

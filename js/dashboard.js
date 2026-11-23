@@ -25,7 +25,14 @@
   const jumpMonth = document.getElementById('calendar-jump-month');
   const jumpYear = document.getElementById('calendar-jump-year');
   const weeks = [...document.querySelectorAll('.calendar-week')];
-  const summaryValues = [...document.querySelectorAll('.summary-breakdown dd')];
+  const summaryBreakdownEl = document.querySelector('.summary-breakdown');
+  const summaryTileEls = {
+    additions: summaryBreakdownEl?.querySelector('[data-summary-tile="additions"]') || null,
+    deductions: summaryBreakdownEl?.querySelector('[data-summary-tile="deductions"]') || null,
+    expenses: summaryBreakdownEl?.querySelector('[data-summary-tile="expenses"]') || null,
+    pending: summaryBreakdownEl?.querySelector('[data-summary-tile="pending"]') || null
+  };
+  let lastSummaryBreakdownSnapshot = null;
   const goalSelects = [document.getElementById('calendar-goal-select'), document.getElementById('mobile-calendar-goal-select')];
   const addAnnouncementButton = document.getElementById('dashboard-add-announcement');
   const quickRecordDialog = document.getElementById('quick-record-dialog');
@@ -230,10 +237,135 @@
     }
   }
 
+  function formatBreakdownValue(value) {
+    const raw = Number(value);
+    const safe = Number.isFinite(raw) ? raw : 0;
+    const negative = safe < 0;
+    const abs = Math.abs(safe);
+    const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const [whole, cents] = formatted.split('.');
+    const digitCount = whole.replace(/,/g, '').length;
+    const lenTier = digitCount <= 4 ? 'sm' : digitCount <= 7 ? 'md' : digitCount <= 10 ? 'lg' : 'xl';
+    const text = `${negative ? '-' : ''}₱${whole}.${cents}`;
+    const html = `${negative ? '<span class="breakdown-val-sign">-</span>' : ''}<i>₱</i><span class="breakdown-val-num">${whole}</span><span class="breakdown-val-cents">.${cents}</span>`;
+    return { amount: safe, isZero: safe === 0, lenTier, text, html };
+  }
+
+  function formatBreakdownEntryMeta(count, { hasArchived = false, amount = 0, pending = false } = {}) {
+    if (count !== undefined && count !== null && count !== '' && Number.isFinite(Number(count))) {
+      const n = Math.max(0, Math.trunc(Number(count)));
+      if (n === 0 && hasArchived) return 'Archived entries';
+      if (n === 0) return 'No entries';
+      const base = `${n.toLocaleString('en-US')} ${n === 1 ? 'entry' : 'entries'}`;
+      return hasArchived ? `${base} + archived` : base;
+    }
+    if (Math.abs(Number(amount || 0)) > 0) return pending ? 'Pending review' : 'Confirmed total';
+    return 'No entries';
+  }
+
+  function syncSummaryBreakdownMode(isSolo) {
+    const solo = Boolean(isSolo);
+    if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
+    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    if (lastSummaryBreakdownSnapshot && lastSummaryBreakdownSnapshot.isSolo !== solo) {
+      renderSummaryBreakdown({ ...lastSummaryBreakdownSnapshot, isSolo: solo });
+    }
+  }
+
+  function renderSummaryBreakdown({ summary = null, pending = null, isSolo = false, error = false } = {}) {
+    const solo = Boolean(isSolo);
+    if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
+    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    lastSummaryBreakdownSnapshot = { summary, pending, isSolo: solo, error: Boolean(error) };
+
+    const safeSummary = summary || {};
+    const safePending = pending || {};
+    const tiles = [
+      {
+        key: 'additions',
+        label: 'Additions (confirmed)',
+        amount: Number(safeSummary.total_additions || 0),
+        count: safeSummary.additions_count,
+        hasArchived: Boolean(safeSummary.has_archived_additions),
+        visible: true
+      },
+      {
+        key: 'deductions',
+        label: 'Deductions (confirmed)',
+        amount: Number(safeSummary.total_deductions || 0),
+        count: safeSummary.deductions_count,
+        hasArchived: Boolean(safeSummary.has_archived_deductions),
+        visible: true
+      },
+      {
+        key: 'expenses',
+        label: 'Expenses',
+        amount: Number(safeSummary.total_expenses || 0),
+        count: safeSummary.expenses_count,
+        hasArchived: Boolean(safeSummary.has_archived_expenses),
+        visible: !solo
+      },
+      {
+        key: 'pending',
+        label: 'Pending (for review)',
+        amount: Number(safePending.amount || 0),
+        count: safePending.count,
+        hasArchived: false,
+        pending: true,
+        visible: true
+      }
+    ];
+
+    const visibleTotal = error
+      ? 0
+      : tiles.reduce((sum, tile) => sum + (tile.visible ? Math.max(0, Number.isFinite(tile.amount) ? tile.amount : 0) : 0), 0);
+
+    tiles.forEach((tile) => {
+      const el = summaryTileEls[tile.key];
+      if (!el) return;
+      el.hidden = !tile.visible;
+      const valEl = el.querySelector('dd');
+      const barEl = el.querySelector('.breakdown-tile-bar b');
+      const metaEl = el.querySelector('.breakdown-tile-meta');
+
+      if (error) {
+        el.classList.add('is-zero');
+        el.setAttribute('aria-label', `${tile.label}: Unavailable`);
+        if (valEl) {
+          valEl.removeAttribute('data-val-len');
+          valEl.textContent = '—';
+        }
+        if (barEl) barEl.style.setProperty('--w', '0%');
+        if (metaEl) metaEl.textContent = 'Unavailable';
+        return;
+      }
+
+      const fmt = formatBreakdownValue(tile.amount);
+      const pct = visibleTotal > 0 && fmt.amount > 0
+        ? Math.max(4, Math.min(100, Math.round((fmt.amount / visibleTotal) * 100)))
+        : 0;
+      const metaText = formatBreakdownEntryMeta(tile.count, {
+        hasArchived: tile.hasArchived,
+        amount: fmt.amount,
+        pending: Boolean(tile.pending)
+      });
+
+      el.classList.toggle('is-zero', fmt.isZero);
+      el.setAttribute('aria-label', `${tile.label}: ${fmt.text}, ${metaText}`);
+      if (valEl) {
+        valEl.dataset.valLen = fmt.lenTier;
+        valEl.innerHTML = fmt.html;
+      }
+      if (barEl) barEl.style.setProperty('--w', `${pct}%`);
+      if (metaEl) metaEl.textContent = metaText;
+    });
+  }
+
   function renderGroupHeader(groups) {
     myGroups = Array.isArray(groups) ? groups : [];
     currentGroup = myGroups.find((group) => group.is_current) || myGroups[0] || null;
     Ipon.syncWorkspaceMode?.(currentGroup ? (currentGroup.workspace_mode || 'GROUP') : 'NONE');
+    syncSummaryBreakdownMode(currentGroup?.workspace_mode === 'SOLO');
     const noGroupCard = document.getElementById('dashboard-no-group-card');
     if (noGroupCard) noGroupCard.hidden = Boolean(currentGroup);
     const summaryCard = document.querySelector('.summary-card');
@@ -875,7 +1007,18 @@
     const total = document.querySelector('.tracked-total');
     total.textContent = heroMoney(0);
     total.classList.add('is-zero');
-    summaryValues.forEach((node) => { node.textContent = Ipon.money(0); });
+    renderSummaryBreakdown({
+      summary: {
+        total_additions: 0,
+        total_deductions: 0,
+        total_expenses: 0,
+        additions_count: 0,
+        deductions_count: 0,
+        expenses_count: 0
+      },
+      pending: { amount: 0, count: 0 },
+      isSolo: currentGroup?.workspace_mode === 'SOLO'
+    });
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
     activeGoalsList = [];
@@ -1037,7 +1180,11 @@
           cycleBadge.textContent = `Active cycle since ${Ipon.dateLabel(summary.cycle_start_date, { month: 'short', year: 'numeric' })}`;
         }
       }
-      [summary.total_additions, summary.total_deductions, summary.total_expenses, pending.amount].forEach((value,index) => { summaryValues[index].textContent = Ipon.money(value); });
+      renderSummaryBreakdown({
+        summary,
+        pending,
+        isSolo: currentGroup?.workspace_mode === 'SOLO'
+      });
       const activeIds = new Set((memberResult.data || []).map((m) => m.id));
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
@@ -1057,6 +1204,7 @@
     } catch (error) {
       if (!hasSnapshot) {
         renderEmptySnapshot();
+        renderSummaryBreakdown({ isSolo: currentGroup?.workspace_mode === 'SOLO', error: true });
         dataStatus.textContent = 'Dashboard data is unavailable. No financial snapshot could be loaded.';
         dataStatus.hidden = false;
       } else {
@@ -1099,7 +1247,21 @@
     document.querySelector('.summary-hero').append(label);
     const total = document.querySelector('.tracked-total');
     total.textContent = heroMoney(fixture.summary.tracked_savings);
-    [fixture.summary.total_additions, fixture.summary.total_deductions, fixture.summary.total_expenses, fixture.pending.reduce((sum, item) => sum + Number(item.amount), 0)].forEach((value, index) => { summaryValues[index].textContent = Ipon.money(value); });
+    const fixtureActivities = Array.isArray(fixture.activities) ? fixture.activities : [];
+    const fixturePending = Array.isArray(fixture.pending) ? fixture.pending : [];
+    renderSummaryBreakdown({
+      summary: {
+        ...fixture.summary,
+        additions_count: fixtureActivities.filter((a) => a.activity_type === 'ADDITION' && a.approval_status === 'CONFIRMED').length,
+        deductions_count: fixtureActivities.filter((a) => a.activity_type === 'DEDUCTION' && a.approval_status === 'CONFIRMED').length,
+        expenses_count: fixtureActivities.filter((a) => a.activity_type === 'EXPENSE' && a.approval_status === 'CONFIRMED').length
+      },
+      pending: {
+        amount: fixturePending.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+        count: fixturePending.length
+      },
+      isSolo: false
+    });
     renderCalendar(fixture.activities);
     renderPending(fixture.pending.slice(0, 3));
   }
@@ -2853,6 +3015,7 @@
   renderCalendar([]);
   state = await Ipon.init({ allowedRoles: ['ADMIN', 'TREASURER', 'MEMBER'] });
   if (state.failed || state.redirecting) return;
+  syncSummaryBreakdownMode(state.profile?.workspace_mode === 'SOLO');
   if (state.profile?.role !== 'ADMIN') document.querySelectorAll('a[href="members.html"],a[href="settings.html"],a[href="audit.html"]').forEach((link) => link.remove());
   if (state.profile?.role !== 'MEMBER') document.querySelectorAll('a[href="user.html"]').forEach((link) => link.remove());
   if (addAnnouncementButton) addAnnouncementButton.hidden = state.profile?.role !== 'ADMIN';

@@ -9,7 +9,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Budget allocation &amp; expenses — myIPON</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css?v=20261123-21"><link rel="stylesheet" href="css/tutorial.css?v=20261120-05"><link rel="stylesheet" href="css/cashflow-monitor.css?v=20261123-01">
+  <link rel="stylesheet" href="css/app.css?v=20261123-22"><link rel="stylesheet" href="css/tutorial.css?v=20261123-01"><link rel="stylesheet" href="css/cashflow-monitor.css?v=20261123-03">
   <script src="js/config.js?v=20261123-01"></script>
 </head>
 
@@ -63,6 +63,10 @@
           </div>
 
           <div class="cf-toolbar-right">
+            <span class="cf-health-badge" id="cf-health-badge" aria-live="polite">
+              <i class="cf-health-dot" aria-hidden="true"></i>
+              <span id="cf-health-text">Ready to track</span>
+            </span>
             <div class="cf-rate-pill">
               <span>Mandatory savings: <strong class="tabular-nums" id="cf-rate-display">20%</strong></span>
               <button class="cf-rate-edit-btn" id="cf-rate-open-btn" type="button" data-requires-data>Configure</button>
@@ -70,105 +74,79 @@
           </div>
         </div>
 
-        <section class="cf-hero" id="cf-hero-card" aria-labelledby="cf-hero-heading">
-          <div class="cf-hero-main">
-            <span class="cf-health-badge" id="cf-health-badge">
-              <i class="cf-health-dot" aria-hidden="true"></i>
-              <span id="cf-health-text">Ready to track</span>
-            </span>
-            <h2 class="cf-hero-label" id="cf-hero-heading">Net monthly income</h2>
-            <p class="cf-hero-net tabular-nums" id="cf-hero-net">₱0.00</p>
-            <p class="cf-hero-formula tabular-nums" id="cf-hero-formula">Available Income (₱0.00) − Expenses (₱0.00)</p>
-          </div>
-          <div class="cf-hero-meter-card">
-            <div>
-              <div class="cf-meter-head">
-                <span>Available income spent</span>
-                <strong class="tabular-nums" id="cf-meter-pct">0%</strong>
-              </div>
-              <div class="cf-meter-track" id="cf-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Percentage of available monthly income spent">
-                <span class="cf-meter-fill" id="cf-meter-fill"></span>
-              </div>
-            </div>
-            <p class="cf-meter-caption" id="cf-meter-caption">Add your monthly income sources — 20% is set aside automatically for mandatory savings.</p>
-            <div class="cf-hero-equations tabular-nums">
-              <div class="cf-hero-eq-item">
-                <span>Total gross income</span>
-                <strong id="cf-hero-gross">₱0.00</strong>
-              </div>
-              <div class="cf-hero-eq-item">
-                <span id="cf-hero-mandatory-label">Mandatory savings (20%)</span>
-                <strong id="cf-hero-mandatory">−₱0.00</strong>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="cf-overview-grid" aria-label="Monthly cash-flow overview">
-          <article class="cf-kpi-card">
+        <section class="cf-overview-grid" id="cf-overview-grid" aria-label="Monthly cash-flow summary">
+          <article class="cf-kpi-card is-green" id="cf-kpi-available-card">
             <div class="cf-kpi-top">
               <span class="cf-kpi-label">Available monthly income</span>
-              <span class="cf-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></span>
+              <span class="cf-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span>
             </div>
-            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-available">₱0.00</strong>
-            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-available-sub">Gross ₱0.00 − 20% savings (₱0.00)</small>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-available" data-no-cents-format="1">—</strong>
+            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-available-sub">Loading monthly income…</small>
           </article>
-          <article class="cf-kpi-card">
+          <article class="cf-kpi-card is-red" id="cf-kpi-expenses-card">
             <div class="cf-kpi-top">
               <span class="cf-kpi-label">Total monthly expenses</span>
-              <span class="cf-kpi-icon is-expense" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14m6-6-6 6-6-6"/></svg></span>
+              <span class="cf-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></span>
             </div>
-            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-expenses">₱0.00</strong>
-            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-expenses-sub">0 recorded expenses · 0% of available</small>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-expenses" data-no-cents-format="1">—</strong>
+            <div class="cf-kpi-bar" id="cf-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Percentage of available monthly income spent">
+              <b id="cf-meter-fill"></b>
+            </div>
+            <small class="cf-kpi-sub tabular-nums" id="cf-kpi-expenses-sub">Loading monthly expenses…</small>
           </article>
-          <article class="cf-kpi-card">
+          <article class="cf-kpi-card is-amber" id="cf-kpi-net-card">
             <div class="cf-kpi-top">
               <span class="cf-kpi-label">Net monthly income</span>
-              <span class="cf-kpi-icon is-net" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg></span>
+              <span class="cf-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2.5"/><path d="M4 10h16"/></svg></span>
             </div>
-            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-net">₱0.00</strong>
+            <strong class="cf-kpi-value tabular-nums" id="cf-kpi-net" data-no-cents-format="1">—</strong>
             <small class="cf-kpi-sub" id="cf-kpi-net-sub">Available monthly income minus expenses</small>
           </article>
         </section>
 
         <section class="cf-workspace-panel" aria-label="Income and expense monitoring workspace">
           <div class="cf-segment-bar">
-            <div class="cf-segmented" role="tablist" aria-label="Switch between Income and Expense monitoring">
-              <button class="cf-seg-btn" id="cf-seg-income" type="button" role="tab" aria-selected="true" aria-controls="cf-income-panel" data-cf-view="income">
+            <div class="cf-segmented" id="cf-segmented" data-t="0" role="tablist" aria-label="Switch between Income and Expense monitoring">
+              <span class="cf-seg-pill" aria-hidden="true"></span>
+              <button class="cf-seg-btn is-green" id="cf-seg-income" type="button" role="tab" aria-selected="true" aria-controls="cf-income-panel" tabindex="0" data-cf-view="income">
                 <span class="cf-seg-btn-label">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
                   <span>Income Monitoring</span>
                 </span>
-                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-income-total">₱0.00</span>
+                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-income-total" data-no-cents-format="1">—</span>
               </button>
-              <button class="cf-seg-btn" id="cf-seg-expense" type="button" role="tab" aria-selected="false" aria-controls="cf-expense-panel" data-cf-view="expense">
+              <button class="cf-seg-btn is-red" id="cf-seg-expense" type="button" role="tab" aria-selected="false" aria-controls="cf-expense-panel" tabindex="-1" data-cf-view="expense">
                 <span class="cf-seg-btn-label">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m6-6-6 6-6-6"/></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
                   <span>Expense Monitoring</span>
                 </span>
-                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-expense-total">₱0.00</span>
+                <span class="cf-seg-btn-total tabular-nums" id="cf-seg-expense-total" data-no-cents-format="1">—</span>
               </button>
             </div>
           </div>
 
           <div class="cf-view-panel" id="cf-income-panel" role="tabpanel" aria-labelledby="cf-seg-income">
             <div class="cf-view-summary" aria-label="Monthly income breakdown">
-              <article class="cf-summary-tile">
-                <span class="cf-summary-kicker">Total gross income</span>
-                <strong class="cf-summary-amount tabular-nums" id="cf-inc-gross">₱0.00</strong>
-                <small class="cf-summary-note" id="cf-inc-gross-sub">0 income sources</small>
-              </article>
-              <article class="cf-summary-tile is-deduction">
+              <article class="cf-summary-tile is-amber">
                 <div class="cf-summary-tile-head">
-                  <span class="cf-summary-kicker" id="cf-inc-savings-label">Less: Mandatory Savings (20%)</span>
+                  <span class="cf-summary-kicker">Total gross income</span>
+                </div>
+                <strong class="cf-summary-amount tabular-nums" id="cf-inc-gross" data-no-cents-format="1">—</strong>
+                <small class="cf-summary-note" id="cf-inc-gross-sub">Loading income sources…</small>
+              </article>
+              <article class="cf-summary-tile is-blue is-deduction">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker" id="cf-inc-savings-label">Less: mandatory savings (20%)</span>
                   <button class="cf-summary-inline-btn" id="cf-inc-savings-edit" type="button" data-requires-data>Edit %</button>
                 </div>
-                <strong class="cf-summary-amount is-deduct tabular-nums" id="cf-inc-savings">−₱0.00</strong>
+                <strong class="cf-summary-amount is-deduct tabular-nums" id="cf-inc-savings" data-no-cents-format="1">—</strong>
                 <small class="cf-summary-note" id="cf-inc-savings-sub">Automatically deducted (20% of gross income)</small>
               </article>
-              <article class="cf-summary-tile is-highlight">
-                <span class="cf-summary-kicker">Available monthly income</span>
-                <strong class="cf-summary-amount is-positive tabular-nums" id="cf-inc-available">₱0.00</strong>
+              <article class="cf-summary-tile is-green is-highlight">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker">Available monthly income</span>
+                </div>
+                <strong class="cf-summary-amount tabular-nums" id="cf-inc-available" data-no-cents-format="1">—</strong>
                 <small class="cf-summary-note">Final income available for monthly expenses</small>
               </article>
             </div>
@@ -201,20 +179,29 @@
 
           <div class="cf-view-panel" id="cf-expense-panel" role="tabpanel" aria-labelledby="cf-seg-expense" hidden>
             <div class="cf-view-summary" aria-label="Monthly expense summary">
-              <article class="cf-summary-tile is-expense-accent">
-                <span class="cf-summary-kicker">Total monthly expenses</span>
-                <strong class="cf-summary-amount is-negative tabular-nums" id="cf-exp-total">₱0.00</strong>
-                <small class="cf-summary-note tabular-nums" id="cf-exp-total-sub">0% of ₱0.00 available income</small>
+              <article class="cf-summary-tile is-red is-expense-accent">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker">Total expenses</span>
+                </div>
+                <strong class="cf-summary-amount tabular-nums" id="cf-exp-total" data-no-cents-format="1">—</strong>
+                <small class="cf-summary-note tabular-nums" id="cf-exp-total-sub">Loading monthly expenses…</small>
               </article>
-              <article class="cf-summary-tile">
-                <span class="cf-summary-kicker">Recorded expenses</span>
-                <strong class="cf-summary-amount tabular-nums" id="cf-exp-count">0 expenses</strong>
-                <small class="cf-summary-note" id="cf-exp-count-sub">No expenses logged this month</small>
+              <article class="cf-summary-tile is-amber" id="cf-exp-remaining-card">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker">Remaining budget</span>
+                </div>
+                <strong class="cf-summary-amount tabular-nums" id="cf-exp-remaining" data-no-cents-format="1">—</strong>
+                <small class="cf-summary-note" id="cf-exp-remaining-sub">Available income minus expenses</small>
               </article>
-              <article class="cf-summary-tile is-highlight">
-                <span class="cf-summary-kicker">Net monthly balance</span>
-                <strong class="cf-summary-amount tabular-nums" id="cf-exp-remaining">₱0.00</strong>
-                <small class="cf-summary-note" id="cf-exp-remaining-sub">Net monthly income remaining</small>
+              <article class="cf-summary-tile is-blue" id="cf-exp-share-card">
+                <div class="cf-summary-tile-head">
+                  <span class="cf-summary-kicker">Share of available income</span>
+                </div>
+                <strong class="cf-summary-amount tabular-nums" id="cf-exp-share-pct">—</strong>
+                <div class="cf-kpi-bar" id="cf-exp-share-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Share of available monthly income spent">
+                  <b id="cf-exp-share-fill"></b>
+                </div>
+                <small class="cf-summary-note" id="cf-exp-share-sub">Of your available monthly income</small>
               </article>
             </div>
 
@@ -790,7 +777,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js"
     integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb"
     crossorigin="anonymous"></script>
-  <script src="js/cashflow-monitor.js?v=20261122-03"></script>
+  <script src="js/cashflow-monitor.js?v=20261123-01"></script>
   <script src="js/budget.js?v=20261122-02"></script>
 </body>
 

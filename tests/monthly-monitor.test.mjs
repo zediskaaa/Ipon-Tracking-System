@@ -40,14 +40,31 @@ test('budget.html exposes unique IDs, balanced dialogs, mode tabs, and segmented
   assert.ok(openDialogs >= 6, 'budget.html must include existing 4 dialogs plus cf-entry-dialog and cf-rate-dialog');
 
   assert.doesNotMatch(html, /\son[a-z]+\s*=/i, 'budget.html must comply with CSP (no inline event handlers)');
+  assert.doesNotMatch(html, /fonts\.googleapis\.com|Fraunces|DM Sans|Palitan ang mga value/i, 'budget.html must not copy external Google Fonts or Filipino demo comments');
+  assert.doesNotMatch(html, /id="cf-hero-card"|class="cf-hero\b/, 'budget.html must reconcile and remove the redundant cf-hero block');
   assert.match(html, /id="budget-tab-monitor"/);
   assert.match(html, /id="budget-tab-allocation"/);
+  assert.match(html, /id="cf-segmented"[^>]*data-t="0"[^>]*role="tablist"/);
+  assert.match(html, /class="cf-seg-pill"/);
   assert.match(html, /id="cf-seg-income"/);
   assert.match(html, /id="cf-seg-expense"/);
+  assert.match(html, /id="cf-meter-track"[^>]*role="progressbar"/);
+  assert.match(html, /id="cf-exp-share-bar"[^>]*role="progressbar"/);
   assert.match(html, /id="cf-entry-dialog"/);
   assert.match(html, /id="cf-rate-dialog"/);
-  assert.match(html, /css\/cashflow-monitor\.css\?v=20261123-01/);
-  assert.match(html, /js\/cashflow-monitor\.js\?v=20261122-03/);
+  assert.match(html, /css\/cashflow-monitor\.css\?v=20261123-03/);
+  assert.match(html, /js\/cashflow-monitor\.js\?v=20261123-01/);
+  // Personal Monthly Monitor expenses must NEVER be marked data-group-only (must stay available in both Solo and Group workspaces)
+  const monitorBlock = html.match(/<section class="cf-monitor"[\s\S]*?<div id="budget-allocation-section"/)?.[0] || '';
+  assert.doesNotMatch(monitorBlock, /data-group-only/i, 'Monthly Income & Expense Monitor must remain available in both Solo and Group workspaces');
+  // Reference visual tokens and sliding tab rules
+  assert.match(css, /\.cf-monitor\s*\{[^}]*--cf-card:\s*#fffdf9;[^}]*--cf-line:\s*#ece4d8;[^}]*--cf-green:\s*#14543f;[^}]*--cf-red:\s*#b3322b;[^}]*--cf-amber:\s*#9a6a14;[^}]*--cf-blue:\s*#2d5f7a;/s);
+  assert.match(css, /html\[data-theme="dark"\] \.cf-monitor\s*\{[^}]*--cf-bg:\s*#12100d;[^}]*--cf-card:\s*#1b1814;[^}]*--cf-line:\s*#2e2a23;[^}]*--cf-ink:\s*#f1ebe0;[^}]*--cf-green:\s*#7fd1a6;[^}]*--cf-red:\s*#f09189;[^}]*--cf-amber:\s*#ebc16a;[^}]*--cf-blue:\s*#8cc3df;/s);
+  assert.match(css, /\.cf-kpi-card\s*\{[^}]*border-radius:\s*22px;[^}]*background:\s*var\(--cf-card\);/s);
+  assert.match(css, /\.cf-kpi-card::before\s*\{[^}]*radial-gradient\(110% 100% at 0% 0%,\s*var\(--cf-tint,\s*transparent\),\s*transparent 62%\)/s);
+  assert.match(css, /\.cf-segmented\[data-t="1"\] \.cf-seg-pill\s*\{\s*transform:\s*translateX\(100%\);\s*\}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.cf-seg-pill,/);
+  assert.doesNotMatch(css, /fonts\.googleapis\.com|Fraunces|DM Sans/i);
   const appCss = read('css/app.css');
   assert.match(appCss, /select:not\(\.custom-select-native\)\{[^}]*padding:\s*9px 36px 9px 14px/);
   assert.match(appCss, /input\[type="search"\]:not\(\.effects-find\):not\(\.tutorial-search-input\)/);
@@ -140,14 +157,14 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   [
     'cf-monitor-section', 'budget-allocation-section', 'budget-page-title', 'budget-page-desc', 'budget-header-actions',
     'cf-error-slot', 'cf-month-prev', 'cf-month-next', 'cf-month-input', 'cf-month-today', 'cf-rate-display', 'cf-rate-open-btn',
-    'cf-hero-card', 'cf-health-badge', 'cf-health-text', 'cf-hero-net', 'cf-hero-formula', 'cf-meter-pct', 'cf-meter-track', 'cf-meter-fill', 'cf-meter-caption',
-    'cf-hero-gross', 'cf-hero-mandatory', 'cf-hero-mandatory-label',
-    'cf-kpi-available', 'cf-kpi-available-sub', 'cf-kpi-expenses', 'cf-kpi-expenses-sub', 'cf-kpi-net', 'cf-kpi-net-sub',
-    'cf-seg-income', 'cf-seg-expense', 'cf-seg-income-total', 'cf-seg-expense-total',
+    'cf-health-badge', 'cf-health-text', 'cf-meter-track', 'cf-meter-fill',
+    'cf-kpi-available-card', 'cf-kpi-available', 'cf-kpi-available-sub', 'cf-kpi-expenses-card', 'cf-kpi-expenses', 'cf-kpi-expenses-sub', 'cf-kpi-net-card', 'cf-kpi-net', 'cf-kpi-net-sub',
+    'cf-segmented', 'cf-seg-income', 'cf-seg-expense', 'cf-seg-income-total', 'cf-seg-expense-total',
     'cf-income-panel', 'cf-expense-panel',
     'cf-inc-gross', 'cf-inc-gross-sub', 'cf-inc-savings-label', 'cf-inc-savings', 'cf-inc-savings-sub', 'cf-inc-savings-edit', 'cf-inc-available',
     'cf-income-search', 'cf-add-income-btn', 'cf-income-body',
-    'cf-exp-total', 'cf-exp-total-sub', 'cf-exp-count', 'cf-exp-count-sub', 'cf-exp-remaining', 'cf-exp-remaining-sub',
+    'cf-exp-total', 'cf-exp-total-sub', 'cf-exp-remaining-card', 'cf-exp-remaining', 'cf-exp-remaining-sub',
+    'cf-exp-share-card', 'cf-exp-share-pct', 'cf-exp-share-bar', 'cf-exp-share-fill', 'cf-exp-share-sub',
     'cf-expense-search', 'cf-expense-cat-filter', 'cf-add-expense-btn', 'cf-expense-body', 'cf-breakdown-wrap', 'cf-breakdown-list',
     'cf-chart-bars', 'cf-chart-prev', 'cf-chart-next', 'cf-chart-range', 'cf-compare-toggle', 'cf-compare-legend', 'cf-chart-hint', 'cf-compare-panel', 'cf-compare-primary-label', 'cf-compare-select', 'cf-compare-prev-btn', 'cf-compare-close-btn', 'cf-compare-grid', 'cf-history-list',
     'cf-entry-dialog', 'cf-entry-form', 'cf-entry-id', 'cf-entry-type', 'cf-entry-eyebrow', 'cf-entry-title', 'cf-entry-copy',
@@ -305,29 +322,42 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   vm.runInNewContext(js, ctx, { filename: 'js/cashflow-monitor.js' });
   await ctx.window.IponCashflowMonitor.mount({ failed: false, redirecting: false, configured: true, profile: { id: 'u1', role: 'MEMBER' } });
 
-  // 1. Exact prompt example verification + smaller centavos markup (<span class="cf-cents">.00</span>)
+  // 1. Exact calculation verification + superscript peso & smaller centavos markup (<span class="cf-cents">.00</span>)
   assert.equal(els.get('cf-inc-gross').textContent, '₱30,000.00');
-  assert.match(els.get('cf-hero-net').innerHTML, /₱9,000<span class="cf-cents">\.00<\/span>/);
-  assert.match(els.get('cf-kpi-available').innerHTML, /₱24,000<span class="cf-cents">\.00<\/span>/);
+  assert.match(els.get('cf-kpi-net').innerHTML, /<i>₱<\/i><span class="cf-val-whole">9,000<\/span><span class="cf-cents">\.00<\/span>/);
+  assert.match(els.get('cf-kpi-available').innerHTML, /<i>₱<\/i><span class="cf-val-whole">24,000<\/span><span class="cf-cents">\.00<\/span>/);
   assert.equal(els.get('cf-inc-savings').textContent, '−₱6,000.00');
   assert.equal(els.get('cf-inc-available').textContent, '₱24,000.00');
   assert.equal(els.get('cf-kpi-available').textContent, '₱24,000.00');
+  assert.match(els.get('cf-kpi-available-sub').innerHTML, /Gross <b>₱30,000\.00<\/b> − 20% savings \(₱6,000\.00\)/);
   assert.equal(els.get('cf-kpi-expenses').textContent, '₱15,000.00');
+  assert.equal(els.get('cf-kpi-expenses-sub').textContent, '2 recorded expenses · 62.5% of available');
   assert.equal(els.get('cf-kpi-net').textContent, '₱9,000.00');
-  assert.equal(els.get('cf-hero-net').textContent, '₱9,000.00');
-  assert.equal(els.get('cf-seg-income-total').textContent, '₱24,000.00');
+  assert.equal(els.get('cf-seg-income-total').textContent, '₱30,000.00');
   assert.equal(els.get('cf-seg-expense-total').textContent, '₱15,000.00');
-  assert.equal(els.get('cf-hero-card').classList.contains('is-deficit'), false);
-  assert.equal(els.get('cf-meter-pct').textContent, '62.5%');
+  assert.equal(els.get('cf-kpi-net-card').classList.contains('is-deficit'), false);
+  assert.equal(els.get('cf-meter-track').getAttribute('aria-valuenow'), '63');
+  assert.equal(els.get('cf-meter-fill').style.width, '62.5%');
+  assert.equal(els.get('cf-exp-share-pct').textContent, '62.5%');
 
-  // 2. Switching between Income and Expense views immediately displays corresponding totals
+  // 2. Switching between Income and Expense views slides pill (data-t) and updates panels + keyboard arrow navigation
+  assert.equal(els.get('cf-segmented').dataset.t, '0');
   assert.equal(els.get('cf-income-panel').hidden, false);
   assert.equal(els.get('cf-expense-panel').hidden, true);
   await els.get('cf-seg-expense')._emit('click');
+  assert.equal(els.get('cf-segmented').dataset.t, '1');
   assert.equal(els.get('cf-income-panel').hidden, true);
   assert.equal(els.get('cf-expense-panel').hidden, false);
   assert.equal(els.get('cf-exp-total').textContent, '₱15,000.00');
-  assert.equal(els.get('cf-exp-count').textContent, '2 expenses');
+  assert.match(els.get('cf-exp-total-sub').textContent, /2 recorded in November 2026/);
+  assert.equal(els.get('cf-exp-remaining').textContent, '₱9,000.00');
+  assert.equal(els.get('cf-exp-share-bar').getAttribute('aria-valuenow'), '63');
+  await els.get('cf-seg-expense')._emit('keydown', { key: 'ArrowLeft' });
+  assert.equal(els.get('cf-segmented').dataset.t, '0');
+  assert.equal(els.get('cf-income-panel').hidden, false);
+  await els.get('cf-seg-income')._emit('keydown', { key: 'ArrowRight' });
+  assert.equal(els.get('cf-segmented').dataset.t, '1');
+  assert.equal(els.get('cf-expense-panel').hidden, false);
 
   // 3. Adding a large expense that exceeds available income triggers negative balance & deficit indicator
   await els.get('cf-add-expense-btn')._emit('click');
@@ -338,9 +368,12 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   await els.get('cf-entry-form')._emit('submit');
 
   assert.equal(els.get('cf-kpi-expenses').textContent, '₱27,000.00');
-  assert.equal(els.get('cf-hero-net').textContent, '−₱3,000.00');
   assert.equal(els.get('cf-kpi-net').textContent, '−₱3,000.00');
-  assert.equal(els.get('cf-hero-card').classList.contains('is-deficit'), true);
+  assert.equal(els.get('cf-kpi-net-card').classList.contains('is-deficit'), true);
+  assert.equal(els.get('cf-exp-remaining').textContent, '−₱3,000.00');
+  assert.equal(els.get('cf-exp-remaining-card').classList.contains('is-deficit'), true);
+  assert.equal(els.get('cf-meter-fill').style.width, '100%');
+  assert.equal(els.get('cf-exp-share-pct').textContent, '112.5%');
   assert.match(els.get('cf-health-text').textContent, /Over available income by ₱3,000\.00/);
 
   // 4. Rejects invalid/negative monetary input cleanly without saving
@@ -352,15 +385,16 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   assert.equal(dbEntries.length, prevLen, 'Negative amounts must be rejected');
   assert.ok(fieldErrors.get('cf-entry-amount'));
 
-  // 5. Configuring mandatory savings % immediately recalculates available & net income
-  await els.get('cf-rate-open-btn')._emit('click');
+  // 5. Configuring mandatory savings % via Edit % button immediately recalculates available & net income
+  await els.get('cf-inc-savings-edit')._emit('click');
+  assert.equal(els.get('cf-rate-dialog').open, true);
   els.get('cf-rate-input').value = '10';
   await els.get('cf-rate-form')._emit('submit');
   // 10% of ₱30,000 = ₱3,000 -> ₱27,000 available -> ₱27,000 - ₱27,000 = ₱0.00
   assert.equal(els.get('cf-inc-savings').textContent, '−₱3,000.00');
   assert.equal(els.get('cf-inc-available').textContent, '₱27,000.00');
-  assert.equal(els.get('cf-hero-net').textContent, '₱0.00');
-  assert.equal(els.get('cf-hero-card').classList.contains('is-deficit'), false);
+  assert.equal(els.get('cf-kpi-net').textContent, '₱0.00');
+  assert.equal(els.get('cf-kpi-net-card').classList.contains('is-deficit'), false);
 
   // 6. Chart Compare toggle shows ONLY the 2 compared months in the chart and updates live when changing target
   const chartMonths = () => [...els.get('cf-chart-bars').innerHTML.matchAll(/data-cf-chart-ym="([^"]+)"/g)].map((m) => m[1]);
@@ -396,7 +430,26 @@ test('js/cashflow-monitor.js accurately calculates 20% mandatory savings, net in
   assert.equal(els.get('cf-inc-savings').textContent, '−₱8,000.00');
   assert.equal(els.get('cf-inc-available').textContent, '₱32,000.00');
   assert.equal(els.get('cf-kpi-expenses').textContent, '₱0.00');
-  assert.equal(els.get('cf-hero-net').textContent, '₱32,000.00');
+  assert.equal(els.get('cf-kpi-net').textContent, '₱32,000.00');
+  assert.equal(els.get('cf-meter-fill').style.width, '0%');
+  assert.equal(els.get('cf-exp-share-pct').textContent, '0%');
+
+  // 8. Zero income + positive expense, decimal pesos, and huge amounts scale cleanly
+  dbEntries = [
+    { id: 'dec-exp', entry_type: 'EXPENSE', monitor_year: 2026, monitor_month: 12, category: 'Food', description: 'Snack', amount: 123.45, entry_date: '2026-12-02' }
+  ];
+  els.get('cf-month-input').value = '2026-12';
+  await els.get('cf-month-input')._emit('change');
+  assert.equal(els.get('cf-kpi-available').textContent, '₱0.00');
+  assert.equal(els.get('cf-kpi-expenses').textContent, '₱123.45');
+  assert.equal(els.get('cf-kpi-net').textContent, '−₱123.45');
+  assert.equal(els.get('cf-kpi-net-card').classList.contains('is-deficit'), true);
+  assert.equal(els.get('cf-exp-share-sub').textContent, 'No available income recorded yet');
+
+  dbEntries.push({ id: 'huge-inc', entry_type: 'INCOME', monitor_year: 2026, monitor_month: 12, category: 'Business', description: 'Enterprise', amount: 999999999999.99, entry_date: '2026-12-03' });
+  await ctx.window.IponCashflowMonitor.reload();
+  assert.equal(els.get('cf-inc-gross').dataset.valLen, 'xl');
+  assert.equal(els.get('cf-kpi-available').dataset.valLen, 'xl');
 });
 
 test('global centavos formatter in js/core.js shrinks .XX centavos across all pages while preserving textContent and skipping inputs/chat', () => {
