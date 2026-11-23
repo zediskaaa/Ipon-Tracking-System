@@ -30,7 +30,7 @@ test('no active HTML, JS, CSS, SW, manifest, CSP, Android, or iOS file reference
   }
 
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'ipon-shell-v262'/);
+  assert.match(sw, /CACHE_NAME = 'ipon-shell-v263'/);
   assert.doesNotMatch(sw, /messages\.js|social-video-embeds\.js|anonymous-avatar\.svg/);
   assert.match(sw, /startsWith\('SOCIAL_'\)/);
 
@@ -131,7 +131,7 @@ test('Edge Functions fail safely on legacy chat actions, skip SOCIAL_* push, and
 
   assert.match(manageAccount, /body\.action === 'chat-upload-urls' \|\| body\.action === 'chat-view-urls' \|\| body\.action === 'chat-cleanup-media'/);
   assert.match(manageAccount, /Chat messaging has been removed from myIPON\./);
-  assert.match(manageAccount, /if \(bucket === 'chat-attachments'\) \{\s*referenced \+= 1;\s*continue;\s*\}/);
+  assert.doesNotMatch(manageAccount, /if \(bucket === 'chat-attachments'\)/);
   assert.doesNotMatch(manageAccount, /personal messages/);
 
   assert.match(sendPush, /if \(notifType\.startsWith\('SOCIAL_'\)\) \{[\s\S]*?reason: 'legacy_chat_removed'/);

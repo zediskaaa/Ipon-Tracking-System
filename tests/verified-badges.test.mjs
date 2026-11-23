@@ -209,6 +209,8 @@ test('first-open badge celebration modal pops up once with confetti, permanent v
   assert.match(modal.innerHTML, /Congratulations/);
   assert.match(modal.innerHTML, /badge-celebrate-confetti-canvas/);
   assert.match(modal.innerHTML, /Verified status unlocked/i);
+  assert.doesNotMatch(modal.innerHTML, /across chats/i);
+  assert.match(modal.innerHTML, /across your profile, group workspaces, and community views\./i);
   assert.match(modal.innerHTML, /Effective until/);
   assert.match(modal.innerHTML, /Message from creator/i);
   assert.match(modal.innerHTML, /Thank you for leading your group consistently!/);

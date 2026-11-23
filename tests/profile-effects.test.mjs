@@ -970,7 +970,7 @@ test('Migration 122-124, Connect Apps X (Twitter) + drag reorder UI, uniform SVG
   assert.match(mig124, /array\['telegram', 'instagram', 'facebook', 'threads', 'x', 'discord'\]/i);
   assert.match(mig124, /when 'x' then v_host in \('x\.com', 'www\.x\.com', 'mobile\.x\.com', 'twitter\.com', 'www\.twitter\.com', 'mobile\.twitter\.com'\)/i);
 
-  // 2. UI markup, drag preview, messaging bio slots & uniform squircle CSS
+  // 2. UI markup, drag preview, profile bio slots & uniform squircle CSS
   assert.match(coreJs, /id="quick-effects-open"[^>]*>Browse effects<\/button><\/div><div class="account-card-effects-row account-card-connect-row" id="quick-connect-apps-card"[\s\S]*?<form id="quick-profile-form"/);
   assert.match(coreJs, /id="quick-connect-apps-card"/);
   assert.match(coreJs, /id="quick-connect-apps-open"/);
@@ -1215,7 +1215,7 @@ test('Migration 160, schema.sql, full-profile CSS scope, and HTML cache-busters 
   }
   assert.match(css, /\.effects-tile \.cat\s*\{[^}]*white-space:\s*normal;[^}]*max-width:\s*100%;/);
   assert.match(css, /\.effects-card\[data-effect-scope="full"\]\s*>\s*canvas\s*\{[^}]*height:\s*100%\s*!important;[^}]*mask-image:\s*none;/s);
-  assert.match(sw, /ipon-shell-v262/);
+  assert.match(sw, /ipon-shell-v263/);
   assert.match(sw, /'js\/profile-effects-sfx\.js'/);
   assert.match(sw, /'js\/profile-effects-exclusive\.js'/);
   assert.match(sw, /'js\/profile-effects-creator\.js'/);

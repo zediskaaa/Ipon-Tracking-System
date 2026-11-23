@@ -743,20 +743,11 @@ async function drainPendingStorageDeletions(admin: ReturnType<typeof createClien
       const slice = items.slice(i, i + 100);
       let stage = 'reference_lookup';
       try {
-        const safe = [];
-        for (const item of slice) {
-          if (bucket === 'chat-attachments') {
-            referenced += 1;
-            continue;
-          }
-          safe.push(item);
-        }
-        if (!safe.length) continue;
         stage = 'object_removal';
-        await removePrivateObjects(admin, bucket, safe.map((x) => x.object_path));
+        await removePrivateObjects(admin, bucket, slice.map((x) => x.object_path));
         stage = 'queue_delete';
         const { data: removedRows, error: deleteError } = await admin.from('pending_storage_deletions')
-          .delete().in('id', safe.map((x) => x.id)).select('id');
+          .delete().in('id', slice.map((x) => x.id)).select('id');
         if (deleteError) throw deleteError;
         drained += removedRows?.length || 0;
       } catch (err) {
@@ -2607,6 +2598,7 @@ Deno.serve(async (request) => {
     }
   }
 
+  // Temporary 410 compatibility guard for in-flight pre-v261 clients; remove on/after 2026-11-30.
   if (body.action === 'chat-upload-urls' || body.action === 'chat-view-urls' || body.action === 'chat-cleanup-media') {
     return json({ error: 'Chat messaging has been removed from myIPON.' }, 410);
   }

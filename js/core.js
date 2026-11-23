@@ -3504,7 +3504,7 @@
         </div>
         <span class="badge-celebrate-eyebrow">VERIFIED STATUS UNLOCKED</span>
         <h2 id="ipon-badge-award-title">Congratulations<span class="badge-celebrate-name">${escapeHtml(recipientName)}!</span></h2>
-        <p class="badge-celebrate-copy">You've been awarded a <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across chats and community views.</p>
+        <p class="badge-celebrate-copy">You've been awarded a <b>${isPermanent ? 'permanent verified badge' : 'verified badge'}</b> on myIPON. Tap <b>Thank you</b> to display it beside your name across your profile, group workspaces, and community views.</p>
         ${datesGridHtml}
         ${creatorMsg ? `
           <div class="badge-celebrate-quote">

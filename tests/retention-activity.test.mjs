@@ -60,7 +60,8 @@ test('queue-only maintenance is authenticated and keeps failed deletions retryab
   const secretCheck = edge.indexOf('timingSafeSecretEqual(providedSecret, expectedSecret)', branch);
   const queueOnly = edge.indexOf('if (body.queue_only === true)', branch);
   assert.ok(secretCheck > branch && queueOnly > secretCheck);
-  assert.match(edge, /if \(bucket === 'chat-attachments'\)\s*\{\s*referenced \+= 1;\s*continue;\s*\}/);
+  assert.doesNotMatch(edge, /if \(bucket === 'chat-attachments'\)/);
+  assert.match(edge, /await removePrivateObjects\(admin, bucket, slice\.map\(\(x\) => x\.object_path\)\)/);
   assert.match(edge, /if \(deleteError\) throw deleteError/);
   assert.match(edge, /catch \(err\) \{\s*failed \+= slice\.length/);
 });
