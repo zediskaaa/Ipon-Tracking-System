@@ -12,9 +12,9 @@ test('Forward modal renders fixed-size thumbnail link previews, deduplicates sel
   const messagesJs = read('js/messages.js');
   const appCss = read('css/app.css');
 
-  // 1. CSS guarantees fixed 60x60 thumbnail box, fixed 80px preview card height, ellipsis truncation, Sent pill, and dark mode parity
-  assert.match(appCss, /\.msg-forward-preview\s*\{[^}]*min-height:\s*80px;[^}]*max-height:\s*80px;/s);
-  assert.match(appCss, /\.msg-forward-thumb\s*\{[^}]*width:\s*60px;[^}]*height:\s*60px;[^}]*flex:\s*0 0 60px;/s);
+  // 1. CSS guarantees fixed 54x54 thumbnail box, fixed 72px preview card height, compact spacing, ellipsis truncation, Sent pill, and dark mode parity
+  assert.match(appCss, /\.msg-forward-preview\s*\{[^}]*min-height:\s*72px;[^}]*max-height:\s*72px;/s);
+  assert.match(appCss, /\.msg-forward-thumb\s*\{[^}]*width:\s*54px;[^}]*height:\s*54px;[^}]*flex:\s*0 0 54px;/s);
   assert.match(appCss, /\.msg-forward-name\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);
   assert.match(appCss, /\.msg-forward-action\s*\{[^}]*min-width:\s*82px;/s);
   assert.match(appCss, /\.msg-forward-row\.is-sent \.msg-forward-action\s*\{/);
@@ -148,8 +148,9 @@ test('Forward modal renders fixed-size thumbnail link previews, deduplicates sel
   assert.match(fwdBody.innerHTML, /class="msg-forward-thumb-img" src="https:\/\/scontent\.cdninstagram\.com\/v\/t51\.2885-15\/thumb\.jpg"/);
   assert.match(fwdBody.innerHTML, /<strong class="msg-forward-preview-title"[^>]*>Never get choked again!<\/strong>/);
   assert.match(fwdBody.innerHTML, /<small class="msg-forward-preview-sub"[^>]*>@amrghoneim_bjj · instagram\.com\/reel\/DgDKxW6xGxj<\/small>/);
-  // 3) Search input and Done footer exist
-  assert.match(fwdBody.innerHTML, /id="msg-forward-search"/);
+  // 3) Clean search input (no stray SVG circle) and Done footer exist
+  assert.match(fwdBody.innerHTML, /<div class="msg-forward-search-wrap">\s*<input type="search" id="msg-forward-search"/);
+  assert.doesNotMatch(fwdBody.innerHTML, /msg-forward-search-wrap[^>]*>\s*<svg/);
   assert.match(fwdBody.innerHTML, /data-msg-forward-close>Done<\/button>/);
 
   // 4) Clicking Send on recipient #1 marks it Sent and keeps the modal OPEN for recipient #2

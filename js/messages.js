@@ -7040,8 +7040,7 @@
 
     body.innerHTML = items.length
       ? `${previewHtml}
-         <div class="msg-search-input-wrap msg-forward-search-wrap">
-           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+         <div class="msg-forward-search-wrap">
            <input type="search" id="msg-forward-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search recipients to forward this message to">
          </div>
          <div class="msg-forward-list" id="msg-forward-list">${items.map((item) => {
@@ -7172,8 +7171,7 @@
         ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderSocialEmbedCardHtml(norm.social, { compact: true })}</div>`
         : '');
     const listHtml = items.length
-      ? `<div class="msg-search-input-wrap msg-share-search-wrap">
-           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      ? `<div class="msg-share-search-wrap">
            <input type="search" id="msg-share-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search chats or people to share with">
          </div>
          <div class="msg-forward-list msg-share-list" id="msg-share-list">${items.map((item) => {
