@@ -12677,6 +12677,8 @@
         targetVersion = info?.remoteVersionName || '';
       }
 
+      if (!force && hasPendingUpdateWork()) return { status: 'deferred' };
+
       showAppUpdatingOverlay({
         title: 'Updating the app…',
         message: targetVersion ? `Downloading myIPON ${targetVersion}…` : 'Downloading latest update…',

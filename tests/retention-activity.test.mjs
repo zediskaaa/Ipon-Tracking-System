@@ -53,6 +53,7 @@ test('web and Android updates defer reloads during active work', () => {
   assert.match(core, /function hasPendingUpdateWork\(\)/);
   assert.match(core, /if \(hasPendingUpdateWork\(\)\) return;/);
   assert.match(core, /liveTag !== initialWebShellTag && !hasPendingUpdateWork\(\)/);
+  assert.match(core, /if \(!force && hasPendingUpdateWork\(\)\) return \{ status: 'deferred' \};/);
   assert.match(core, /#msg-upload-queue:not\(\[hidden\]\)/);
   assert.doesNotMatch(sw, /skipWaiting\(\)/);
 });
