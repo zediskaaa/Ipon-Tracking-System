@@ -79,6 +79,9 @@ test('social video embeds parser handles YouTube, TikTok, and Facebook links and
   assert.equal(fbReel.needsResolve, false);
   assert.match(fbReel.embedUrl, /^https:\/\/www\.facebook\.com\/plugins\/video\.php\?href=/);
   assert.doesNotMatch(fbReel.embedUrl, /autoplay=true/);
+  const fbCardHtml = api.renderSocialEmbedCardHtml(fbReel);
+  assert.match(fbCardHtml, /class="msg-social-poster"/);
+  assert.doesNotMatch(fbCardHtml, /<iframe\b/);
 
   const fbWatch = api.parseSocialVideoUrl('https://m.facebook.com/watch/?v=987654321098765');
   assert.equal(fbWatch.provider, 'facebook');
@@ -250,7 +253,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-12"><\/script>\s*<script src="js\/messages\.js\?v=20261123-09"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-13"><\/script>\s*<script src="js\/messages\.js\?v=20261123-09"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture + Edge Function resolver
