@@ -640,6 +640,9 @@ html:has(.account-dialog:modal),body:has(.account-dialog:modal){overflow:hidden;
 .announcement-empty-state small{display:inline-block;padding:3px 12px;border-radius:999px;background:#f5e5c9;color:#7a4f08;font:700 11px/1.2 Arial,sans-serif}
 .announcement-avatar{width:24px;height:24px;border:1.5px solid #fffdf9;font-size:9px}
 .announcement-avatar.is-owner{border-color:#e8b954}
+.announcement-avatar-profile-trigger{padding:0;border-radius:50%;cursor:pointer}
+.announcement-avatar-profile-trigger:focus-visible{outline:2px solid #0b7952;outline-offset:3px}
+.announcement-avatar-profile-trigger[aria-busy="true"]{opacity:.65;cursor:progress}
 .announcement-item{display:flex;flex-direction:column;justify-content:space-between;width:100%;max-width:380px;height:260px;min-height:260px;box-sizing:border-box;overflow:hidden;min-width:0;padding:14px 16px 12px;border:1px solid rgba(20,45,43,.12);border-radius:14px;background:#ffffff;color:var(--ink);text-align:left;box-shadow:0 2px 8px rgba(20,45,43,.03);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;position:relative}
 .announcement-list .announcement-item{max-width:100%}
 .announcement-item:hover{border-color:rgba(20,45,43,.28);box-shadow:0 8px 22px rgba(20,45,43,.08);transform:translateY(-2px)}

@@ -3168,6 +3168,7 @@
   }
 
   const CREATOR_ACCOUNT_EMAIL = 'breadspanish231@gmail.com';
+  const CREATOR_EFFECT_PROFILE_ID = 'f58acf43-a3ec-4c31-a4fa-9def23c838f1';
   const EFFECT_ALLOWED_EMAILS = new Set([CREATOR_ACCOUNT_EMAIL, 'antalannhicolejoy19@gmail.com']);
   const canBrowseProfileEffects = (profile = currentProfile) => EFFECT_ALLOWED_EMAILS.has(String(profile?.email || '').trim().toLowerCase());
   const hasAllEffectsAccess = (profile = currentProfile) => String(profile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
@@ -10514,7 +10515,14 @@
     const isOwnPost = currentProfile?.id && item?.author_id === currentProfile.id;
     const name = (isOwnPost && currentProfile.full_name) || item.author_name || (isOwner ? 'Owner' : 'Administrator');
     const avatarUrl = (isOwnPost && currentProfile.avatar_url !== undefined) ? currentProfile.avatar_url : item.author_avatar_url;
-    const avatarHtml = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`, item.author_id);
+    const avatarCircle = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`);
+    const canOpenAuthorProfile = Boolean(item.author_id) && (
+      !isOwner || currentProfile?.role === 'SUPER_ADMIN'
+      || String(currentProfile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL
+    );
+    const avatarHtml = canOpenAuthorProfile
+      ? `<button type="button" class="avatar-presence-wrap announcement-avatar-wrap${isOwner ? ' is-owner-wrap' : ''} announcement-avatar-profile-trigger" data-announcement-profile-item="${escapeHtml(item.id)}" aria-label="View ${escapeHtml(name)} profile">${avatarCircle}</button>`
+      : avatarCircle;
     const authorHtml = `<span class="announcement-author${isOwner ? ' is-owner' : ''}">${escapeHtml(name)}</span>`;
     const dateText = dateLabel(item.created_at, { dateStyle: 'medium', timeStyle: 'short' }).replace(/,\s*(\d{1,2}:\d{2}\s*(?:AM|PM))$/i, ' · $1');
     return `${avatarHtml}${authorHtml}<span class="announcement-meta-dot" aria-hidden="true">&middot;</span><time datetime="${escapeHtml(item.created_at)}">${escapeHtml(dateText)}</time>`;
@@ -11436,9 +11444,44 @@
       return items;
     };
 
+    const openAnnouncementAuthorProfile = async (button) => {
+      const item = items.find((entry) => entry.id === button.dataset.announcementProfileItem);
+      if (!item?.author_id || button.disabled) return;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      try {
+        if (item.author_role === 'SUPER_ADMIN' && !item.group_id) {
+          const isCreator = String(currentProfile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
+          if (!isCreator && currentProfile?.role !== 'SUPER_ADMIN') return;
+          await openMemberProfileDialog(isCreator ? currentProfile.id : CREATOR_EFFECT_PROFILE_ID, {
+            fullName: item.author_name,
+            avatarUrl: item.author_avatar_url,
+            triggerEl: button
+          });
+        } else {
+          await openMemberProfileDialog(item.author_id, {
+            fullName: item.author_name,
+            avatarUrl: item.author_avatar_url,
+            triggerEl: button
+          });
+        }
+      } catch (error) {
+        toast(friendlyError(error), 'error');
+      } finally {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    };
+
     if (!listElement.dataset.boundAnnouncements) {
       listElement.dataset.boundAnnouncements = 'true';
       listElement.addEventListener('click', (event) => {
+        const profileButton = event.target.closest('[data-announcement-profile-item]');
+        if (profileButton) {
+          event.stopPropagation();
+          openAnnouncementAuthorProfile(profileButton);
+          return;
+        }
         const choiceBtn = event.target.closest('[data-react-choice]');
         if (choiceBtn) {
           const announcementId = choiceBtn.dataset.announcementId;
@@ -11750,6 +11793,14 @@
             if (activeEntry) viewerMeta.innerHTML = announcementAuthorMeta(activeEntry);
           }
         }
+      });
+    }
+
+    if (viewerMeta && !viewerMeta.dataset.announcementProfileBound) {
+      viewerMeta.dataset.announcementProfileBound = 'true';
+      viewerMeta.addEventListener('click', (event) => {
+        const profileButton = event.target.closest('[data-announcement-profile-item]');
+        if (profileButton) openAnnouncementAuthorProfile(profileButton);
       });
     }
 

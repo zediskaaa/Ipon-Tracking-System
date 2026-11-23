@@ -83,6 +83,7 @@ test('migration 20261118_125 allows Super Admin to pin announcements with premiu
         contains: (c) => classes.has(c)
       },
       setAttribute: (k, v) => attrs.set(k, String(v)),
+      removeAttribute: (k) => attrs.delete(k),
       getAttribute: (k) => attrs.get(k) ?? null,
       addEventListener: (t, fn) => {
         if (!listeners.has(t)) listeners.set(t, []);
@@ -214,6 +215,19 @@ test('migration 20261118_125 allows Super Admin to pin announcements with premiu
         from: (t) => makeQueryChain(t),
         rpc: async (fn, params) => {
           rpcCalls.push({ fn, params });
+          if (fn === 'get_group_member_profile') {
+            return {
+              data: {
+                profile_visible: true,
+                id: 'f58acf43-a3ec-4c31-a4fa-9def23c838f1',
+                full_name: 'Creator Profile',
+                equipped_profile_effect: 'creator_astral_sovereign',
+                card_theme: 'emerald',
+                social_links: {}
+              },
+              error: null
+            };
+          }
           if (fn === 'set_announcement_pinned') {
             return {
               data: {
@@ -262,6 +276,16 @@ test('migration 20261118_125 allows Super Admin to pin announcements with premiu
   assert.ok(idxPinnedBefore >= 0 && idxUnpinnedBefore > idxPinnedBefore, 'pinned item renders before unpinned');
   assert.match(saListEl.innerHTML, /class="announcement-pinned-badge"/);
   assert.match(saListEl.innerHTML, /data-announcement-pin="ann-new"/);
+  assert.match(saListEl.innerHTML, /data-announcement-profile-item="ann-new"/);
+
+  const authorDp = makeEl('button');
+  authorDp.dataset.announcementProfileItem = 'ann-new';
+  authorDp.closest = (sel) => (sel.includes('[data-announcement-profile-item]') ? authorDp : null);
+  saListEl.dispatchEvent({ type: 'click', target: authorDp, stopPropagation() { } });
+  await new Promise((r) => setTimeout(r, 15));
+  assert.ok(rpcCalls.some((c) => c.fn === 'get_group_member_profile' && c.params.p_target_id === 'f58acf43-a3ec-4c31-a4fa-9def23c838f1'));
+  assert.equal(authorDp.disabled, false);
+  assert.equal(getEl('announcement-viewer-dialog').open, false, 'DP click must open the profile, not the announcement viewer');
 
   // Clicking card pin button pins ann-new via RPC and promotes it above earlier-pinned item
   const pinCardBtn = {
@@ -280,6 +304,12 @@ test('migration 20261118_125 allows Super Admin to pin announcements with premiu
   // Opening viewer shows pinned badge & Unpin button for Super Admin, and clicking Unpin toggles off
   await saCtrl.openMatching({ id: 'ann-new' });
   const viewerDlg = getEl('announcement-viewer-dialog');
+  const viewerDp = makeEl('button');
+  viewerDp.dataset.announcementProfileItem = 'ann-new';
+  viewerDp.closest = (sel) => (sel.includes('[data-announcement-profile-item]') ? viewerDp : null);
+  getEl('announcement-viewer-meta').dispatchEvent({ type: 'click', target: viewerDp });
+  await new Promise((r) => setTimeout(r, 15));
+  assert.equal(rpcCalls.filter((c) => c.fn === 'get_group_member_profile').length, 1, 'the second open reuses the existing profile cache');
   const viewerPinned = getEl('announcement-viewer-pinned');
   const viewerPinBtn = getEl('announcement-viewer-pin');
   assert.equal(viewerDlg.classList.contains('is-pinned'), true);
