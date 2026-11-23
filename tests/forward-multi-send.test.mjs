@@ -214,3 +214,201 @@ test('Forward modal renders fixed-size thumbnail link previews, deduplicates sel
   assert.doesNotMatch(messagesJs, /const bubbleContent =[\s\S]{0,360}\$\{fwdHtml\}/);
   assert.match(appCss, /\.msg-row\.is-mine \.msg-forwarded-tag\s*\{[^}]*align-self:\s*flex-end;/s);
 });
+
+test('External Share-to-myIPON (TikTok/FB/IG/X/posts) defers intake until eligible, opens Forward-style multi-send modal with thumbnail preview, optional note, and Sent state', async () => {
+  const embedsJs = read('js/social-video-embeds.js');
+  const messagesJs = read('js/messages.js');
+
+  const docListeners = new Map();
+  const rpcCalls = [];
+  let nativeConsumeCalls = 0;
+  let pendingNativeJson = JSON.stringify({
+    title: 'Funny TikTok clip',
+    text: 'https://vt.tiktok.com/ZSMxDemo1/',
+    url: ''
+  });
+
+  const makeClassList = (initial = []) => {
+    const set = new Set(initial);
+    return {
+      add: (...c) => c.forEach((x) => set.add(x)),
+      remove: (...c) => c.forEach((x) => set.delete(x)),
+      toggle: (c, f) => (f === undefined ? (set.has(c) ? (set.delete(c), false) : (set.add(c), true)) : (f ? set.add(c) : set.delete(c))),
+      contains: (c) => set.has(c)
+    };
+  };
+
+  let shareCloseCount = 0;
+  const wsDialog = { id: 'msg-workspace-dialog', open: true, showModal() { this.open = true; }, close() { this.open = false; }, addEventListener: () => { } };
+  const shareDialog = { id: 'msg-share-dialog', open: false, showModal() { this.open = true; }, close() { this.open = false; shareCloseCount += 1; }, addEventListener: () => { } };
+  const shareStatus = { id: 'msg-share-status', textContent: 'Tap Send to share', classList: makeClassList() };
+  const shareNote = { id: 'msg-share-note', value: '' };
+  const shareBody = { id: 'msg-share-body', dataset: {}, innerHTML: '', querySelectorAll: () => [] };
+
+  const docStub = {
+    documentElement: { dataset: {} },
+    body: { insertAdjacentHTML: () => { } },
+    getElementById: (id) => {
+      if (id === 'msg-workspace-dialog') return wsDialog;
+      if (id === 'msg-share-dialog') return shareDialog;
+      if (id === 'msg-share-body') return shareBody;
+      if (id === 'msg-share-status') return shareStatus;
+      if (id === 'msg-share-note') return shareNote;
+      return null;
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (ev, fn) => {
+      if (!docListeners.has(ev)) docListeners.set(ev, []);
+      docListeners.get(ev).push(fn);
+    },
+    removeEventListener: () => { }
+  };
+
+  const winStub = {
+    IponNativeShare: {
+      isSupported: () => true,
+      consumePendingShare: () => {
+        nativeConsumeCalls += 1;
+        const out = pendingNativeJson;
+        pendingNativeJson = '';
+        return out;
+      }
+    },
+    Ipon: {
+      profile: null,
+      escapeHtml: (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+      initials: (n) => String(n || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase(),
+      isSafeImageRef: (u) => /^https?:\/\//i.test(String(u || '')),
+      friendlyError: (e) => String(e?.message || e),
+      toast: () => { },
+      bindAvatarFallbacks: () => { },
+      invokeSocialEmbedResolver: async () => ({
+        provider: 'tiktok',
+        badge: 'TikTok',
+        title: 'Funny TikTok clip',
+        author: '@creator_ph',
+        thumbnailUrl: 'https://p16-sign.tiktokcdn.com/thumb.jpg',
+        canonicalUrl: 'https://www.tiktok.com/@creator_ph/video/7428192837461928374'
+      }),
+      rpc: async (name, params) => {
+        rpcCalls.push({ name, params });
+        if (name === 'start_or_open_direct_chat') return { id: `conv-opened-${params.p_target_id}` };
+        if (name === 'send_chat_message') return { id: `msg-sent-${rpcCalls.length}` };
+        return [];
+      },
+      client: null
+    },
+    addEventListener: () => { },
+    removeEventListener: () => { },
+    location: { search: '', href: 'https://example.test/dashboard.html' }
+  };
+  winStub.window = winStub;
+
+  const sandbox = {
+    window: winStub,
+    globalThis: winStub,
+    document: docStub,
+    location: winStub.location,
+    Map,
+    Set,
+    URL,
+    URLSearchParams,
+    navigator: {},
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: () => { }
+  };
+
+  vm.runInNewContext(embedsJs, sandbox);
+  const patchedMessages = messagesJs.replace(
+    'window.IponMessages = {',
+    'window.IponMessages = { __seedShareForTest(me, convs, friends) { initializedProfile = me; state.conversations = convs; state.conversationsLoaded = true; state.overviewLoaded = true; state.overview = { me, friends, incoming_requests: [], sent_requests: [], blocked_users: [] }; }, __checkShareForTest() { return checkIncomingSharePayload(); },'
+  );
+  vm.runInNewContext(patchedMessages, sandbox);
+
+  // 1) Before auth/profile initialization, checkIncomingSharePayload MUST NOT consume pending native share
+  const earlyResult = await winStub.IponMessages.__checkShareForTest();
+  assert.equal(earlyResult, false);
+  assert.equal(nativeConsumeCalls, 0, 'Pending native share must stay queued until user profile is eligible');
+  assert.ok(pendingNativeJson.includes('vt.tiktok.com'));
+
+  // 2) Once signed in & seeded, checkIncomingSharePayload consumes native share and opens Forward-style #msg-share-dialog
+  const me = { id: 'u-me', full_name: 'Zedrick De Monteverde', role: 'MEMBER', status: 'ACTIVE', avatar_url: '' };
+  winStub.IponMessages.__seedShareForTest(
+    me,
+    [
+      { id: 'c-self', status: 'ACCEPTED', kind: 'DIRECT', anonymous_enabled: false, peer: { id: 'u-me', full_name: 'Zedrick De Monteverde', username: 'zediskaaa' } },
+      { id: 'c-a', status: 'ACCEPTED', kind: 'DIRECT', anonymous_enabled: false, peer: { id: 'u-a', full_name: 'Nhicole', username: '_ligaya' } }
+    ],
+    [
+      { id: 'u-b', full_name: 'Jherrico', username: 'jherrico_ipon' }
+    ]
+  );
+
+  const opened = await winStub.IponMessages.__checkShareForTest();
+  assert.equal(opened, true);
+  assert.equal(nativeConsumeCalls, 1);
+  assert.equal(shareDialog.open, true);
+  assert.equal(shareBody.dataset.shareBaseText, 'https://vt.tiktok.com/ZSMxDemo1/');
+  assert.match(shareBody.innerHTML, /class="msg-forward-preview is-social is-tiktok"/);
+  assert.match(shareBody.innerHTML, /id="msg-share-note"/);
+  assert.doesNotMatch(shareBody.innerHTML, /id="msg-share-text"/);
+  assert.match(shareBody.innerHTML, /<div class="msg-forward-search-wrap msg-share-search-wrap">\s*<input type="search" id="msg-share-search"/);
+  assert.equal((shareBody.innerHTML.match(/data-share-send-user="u-me"/g) || []).length, 1, 'Self account appears once in Share dialog');
+
+  // 3) Multi-recipient Send -> Sent with optional note, dialog stays open until Done
+  const makeShareRow = ({ user, conv, key, name }) => {
+    const pill = { textContent: 'Send', innerHTML: 'Send' };
+    const row = {
+      disabled: false,
+      dataset: { shareSendUser: user, shareSendConv: conv, shareKey: key, shareName: name },
+      classList: makeClassList(['msg-forward-row', 'msg-share-row']),
+      querySelector: (sel) => (sel === '[data-share-btn-label]' ? pill : null),
+      setAttribute: () => { },
+      closest: (sel) => (sel === '[data-share-send-user]' ? row : null),
+      _pill: pill
+    };
+    return row;
+  };
+  const emitClick = async (target) => {
+    for (const fn of docListeners.get('click') || []) {
+      await fn({ target });
+    }
+  };
+
+  shareNote.value = 'Watch this!';
+  const rowA = makeShareRow({ user: 'u-a', conv: 'c-a', key: 'u:u-a', name: 'Nhicole' });
+  const rowB = makeShareRow({ user: 'u-b', conv: '', key: 'u:u-b', name: 'Jherrico' });
+
+  await emitClick(rowA);
+  assert.equal(shareDialog.open, true, 'Share dialog stays open after first user');
+  assert.equal(rowA.dataset.shareState, 'sent');
+  assert.equal(rowA.classList.contains('is-sent'), true);
+  assert.match(rowA._pill.innerHTML, />Sent<\/span>/);
+  assert.equal(shareStatus.textContent, 'Sent to 1 chat');
+
+  await emitClick(rowB);
+  assert.equal(shareDialog.open, true, 'Share dialog stays open after second user');
+  assert.equal(rowB.dataset.shareState, 'sent');
+  assert.equal(shareStatus.textContent, 'Sent to 2 chats');
+  assert.ok(rpcCalls.some((c) => c.name === 'send_chat_message' && c.params.p_conversation_id === 'c-a' && c.params.p_body === 'Watch this!\nhttps://vt.tiktok.com/ZSMxDemo1/'));
+  assert.ok(rpcCalls.some((c) => c.name === 'send_chat_message' && c.params.p_conversation_id === 'conv-opened-u-b' && c.params.p_body === 'Watch this!\nhttps://vt.tiktok.com/ZSMxDemo1/'));
+
+  await emitClick({ closest: (sel) => (sel === '[data-msg-share-close]' ? {} : null) });
+  assert.equal(shareDialog.open, false);
+  assert.equal(shareCloseCount, 1);
+
+  // 4) Regular non-video social post (e.g. Facebook group post) also renders compact Link preview with title
+  const postOpened = await winStub.IponMessages.openShareLinkDialog({
+    title: 'Monthly savings challenge post',
+    text: 'https://www.facebook.com/groups/iponph/posts/9988776655/',
+    url: ''
+  });
+  assert.equal(postOpened, true);
+  assert.equal(shareDialog.open, true);
+  assert.match(shareBody.innerHTML, /class="msg-forward-preview is-link"/);
+  assert.match(shareBody.innerHTML, /Monthly savings challenge post/);
+});

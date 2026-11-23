@@ -693,18 +693,75 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private String extractIntentCharSequence(Intent intent, String key) {
+        if (intent == null || key == null) return "";
+        try {
+            final CharSequence cs = intent.getCharSequenceExtra(key);
+            if (cs != null && cs.length() > 0) return cs.toString().trim();
+        } catch (Throwable ignored) { }
+        try {
+            final String s = intent.getStringExtra(key);
+            if (s != null && !s.trim().isEmpty()) return s.trim();
+        } catch (Throwable ignored) { }
+        return "";
+    }
+
+    private String extractSharedTextFromIntent(Intent intent) {
+        String text = extractIntentCharSequence(intent, Intent.EXTRA_TEXT);
+        if (!text.isEmpty()) return text;
+        final String html = extractIntentCharSequence(intent, Intent.EXTRA_HTML_TEXT);
+        if (!html.isEmpty()) {
+            final java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://[^\\s\"'<>]+").matcher(html);
+            if (m.find()) return m.group(0).trim();
+            final String plain = html.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+            if (!plain.isEmpty()) return plain;
+        }
+        final ClipData clip = intent.getClipData();
+        if (clip != null && clip.getItemCount() > 0) {
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                final ClipData.Item item = clip.getItemAt(i);
+                if (item == null) continue;
+                final CharSequence itemText = item.getText();
+                if (itemText != null && !itemText.toString().trim().isEmpty()) {
+                    return itemText.toString().trim();
+                }
+                final Uri itemUri = item.getUri();
+                if (itemUri != null) {
+                    final String scheme = itemUri.getScheme();
+                    if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
+                        return itemUri.toString().trim();
+                    }
+                }
+                try {
+                    final CharSequence coerced = item.coerceToText(this);
+                    if (coerced != null) {
+                        final String candidate = coerced.toString().trim();
+                        if (!candidate.isEmpty() && !candidate.startsWith("content://") && !candidate.startsWith("file://")) {
+                            return candidate;
+                        }
+                    }
+                } catch (Throwable ignored) { }
+            }
+        }
+        return "";
+    }
+
     private void handleShareIntent(Intent intent) {
         if (intent == null) return;
         if (!Intent.ACTION_SEND.equals(intent.getAction())) return;
         final String mime = intent.getType();
-        if (mime == null || !mime.startsWith("text/")) return;
-        String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-        String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+        if (mime != null && !mime.startsWith("text/")) return;
+        String sharedText = extractSharedTextFromIntent(intent);
+        String sharedTitle = extractIntentCharSequence(intent, Intent.EXTRA_SUBJECT);
+        if (sharedTitle.isEmpty()) {
+            sharedTitle = extractIntentCharSequence(intent, Intent.EXTRA_TITLE);
+        }
         intent.setAction(Intent.ACTION_MAIN);
         intent.removeExtra(Intent.EXTRA_TEXT);
+        intent.removeExtra(Intent.EXTRA_HTML_TEXT);
         intent.removeExtra(Intent.EXTRA_SUBJECT);
-        sharedText = sharedText != null ? sharedText.trim() : "";
-        sharedTitle = sharedTitle != null ? sharedTitle.trim() : "";
+        intent.removeExtra(Intent.EXTRA_TITLE);
+        intent.setClipData(null);
         if (sharedText.isEmpty() && sharedTitle.isEmpty()) return;
         if (sharedText.length() > 4000) sharedText = sharedText.substring(0, 4000);
         if (sharedTitle.length() > 200) sharedTitle = sharedTitle.substring(0, 200);

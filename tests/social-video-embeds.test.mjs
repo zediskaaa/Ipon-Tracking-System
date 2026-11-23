@@ -436,11 +436,16 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   const manifestXml = read('android/app/src/main/AndroidManifest.xml');
   assert.match(manifestXml, /android\.intent\.action\.SEND/);
   assert.match(manifestXml, /android:mimeType="text\/plain"/);
-  assert.match(manifestXml, /Send to myIPON Messages/);
+  assert.match(manifestXml, /android:mimeType="text\/\*"/);
+  assert.match(manifestXml, /android:label="@string\/app_name"/);
 
   const mainActivity = read('android/app/src/main/java/com/myipon/app/MainActivity.java');
   assert.match(mainActivity, /addJavascriptInterface\(new ShareBridge\(\), "IponNativeShare"\)/);
   assert.match(mainActivity, /handleShareIntent\(getIntent\(\)\)/);
+  assert.match(mainActivity, /getCharSequenceExtra\(key\)/);
+  assert.match(mainActivity, /Intent\.EXTRA_HTML_TEXT/);
+  assert.match(mainActivity, /Intent\.EXTRA_TITLE/);
+  assert.match(mainActivity, /intent\.getClipData\(\)/);
   assert.match(mainActivity, /myipon:native-share/);
   assert.match(mainActivity, /public void onShowCustomView\(View view, CustomViewCallback callback\)/);
   assert.match(mainActivity, /public void onHideCustomView\(\)/);
@@ -473,7 +478,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-18"><\/script>\s*<script src="js\/messages\.js\?v=20261123-18"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-18"><\/script>\s*<script src="js\/messages\.js\?v=20261123-19"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture, Edge Function resolver, fullscreen Back exit, and browser popstate Back for video viewer

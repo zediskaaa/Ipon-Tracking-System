@@ -12649,10 +12649,6 @@ html[data-theme="dark"] .msg-friends-hero {
   justify-content: space-between;
   gap: 12px;
 }
-.msg-share-body .msg-forward-footer {
-  margin: 2px -20px -20px;
-  padding: 12px 20px;
-}
 .msg-forward-status {
   font-size: 12.5px;
   font-weight: 600;
@@ -28007,67 +28003,41 @@ html[data-theme="dark"] .msg-social-ext:hover {
 
 /* ── Share-to-myIPON Chat Dialog ── */
 .msg-share-dialog {
-  max-width: min(500px, calc(100vw - 24px));
+  max-width: min(472px, calc(100vw - 24px));
 }
-.msg-share-body {
-  padding: 16px 20px 20px;
-  display: grid;
-  gap: 14px;
-  max-height: min(76dvh, 640px);
-  overflow-y: auto;
-}
-.msg-share-preview {
-  min-width: 0;
-}
-.msg-share-field {
-  margin: 0;
-  display: grid;
-  gap: 6px;
-}
-.msg-share-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.msg-share-count {
-  font-size: 11.5px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.msg-share-textarea {
+.msg-share-note-wrap {
+  flex: 0 0 auto;
   width: 100%;
-  min-height: 76px;
-  max-height: 160px;
-  resize: vertical;
-  border-radius: 12px;
-  border: 1px solid rgba(20, 45, 43, .18);
+}
+.msg-share-note-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(18, 49, 39, .14);
   background: #ffffff;
   color: var(--ink-strong, #10251e);
-  padding: 10px 12px;
   font: inherit;
-  font-size: 13.5px;
-  line-height: 1.45;
+  font-size: 13px;
   box-sizing: border-box;
+  transition: border-color .16s ease, box-shadow .16s ease;
 }
-.msg-share-textarea[aria-invalid="true"] {
-  border-color: #c4342d;
+.msg-share-note-input::placeholder {
+  color: var(--muted);
 }
-.msg-share-search-wrap {
-  width: 100%;
-}
-.msg-share-list {
-  max-height: 240px;
-  overflow-y: auto;
+.msg-share-note-input:focus {
+  outline: none;
+  border-color: #167954;
+  box-shadow: 0 0 0 3px rgba(22, 121, 84, .14);
 }
 .msg-share-row[hidden],
 .msg-share-empty[hidden] {
   display: none;
 }
-html[data-theme="dark"] .msg-share-textarea {
-  background: #0f1f19;
-  color: #eff7f2;
-  border-color: rgba(226, 240, 232, .18);
+html[data-theme="dark"] .msg-share-note-input {
+  background: rgba(11, 24, 19, .92);
+  border-color: rgba(226, 240, 232, .16);
+  color: #f1f7f4;
 }
 @media (max-width: 640px) {
   .msg-bubble.has-social-embed {
@@ -28078,13 +28048,6 @@ html[data-theme="dark"] .msg-share-textarea {
   .msg-bubble.has-social-embed:has(.msg-social-card.is-portrait) {
     width: min(220px, calc(100vw - 88px));
     max-width: 100%;
-  }
-  .msg-share-body {
-    padding: 14px 16px 18px;
-  }
-  .msg-share-body .msg-forward-footer {
-    margin: 2px -16px -18px;
-    padding: 11px 16px;
   }
   .msg-forward-dialog .form-dialog-header {
     padding: 12px 14px 9px;

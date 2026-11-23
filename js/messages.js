@@ -1086,16 +1086,16 @@
       </dialog>
 
       <!-- Share External Link to Chat Dialog -->
-      <dialog class="form-dialog msg-sub-dialog msg-share-dialog" id="msg-share-dialog" aria-labelledby="msg-share-title">
+      <dialog class="form-dialog msg-sub-dialog msg-forward-dialog msg-share-dialog" id="msg-share-dialog" aria-labelledby="msg-share-title">
         <div class="form-dialog-sheet">
           <header class="form-dialog-header">
             <div>
               <h2 id="msg-share-title">Send to chat</h2>
-              <p>Choose who should receive this shared link in myIPON Messages.</p>
+              <p>Tap Send beside each chat to share with one or more people.</p>
             </div>
             <button class="dialog-close" type="button" data-msg-share-close aria-label="Close share dialog"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
-          <div class="msg-share-body" id="msg-share-body"></div>
+          <div class="msg-forward-body msg-share-body" id="msg-share-body"></div>
         </div>
       </dialog>
 
@@ -6953,13 +6953,15 @@
     }
   }
 
-  function renderForwardPreviewHtml(messageObj) {
+  function renderForwardPreviewHtml(messageObj, { fallbackSub = 'Ready to forward' } = {}) {
     const rawBody = String(messageObj?.body || '').trim();
+    const rawTitle = String(messageObj?.title || '').trim();
     const socialEmbeds = rawBody && typeof window?.IponSocialEmbeds?.extractSocialVideoEmbeds === 'function'
       ? window.IponSocialEmbeds.extractSocialVideoEmbeds(rawBody, 1)
       : [];
     if (socialEmbeds.length && typeof window?.IponSocialEmbeds?.renderCompactLinkPreviewHtml === 'function') {
-      return window.IponSocialEmbeds.renderCompactLinkPreviewHtml(socialEmbeds[0], { caption: rawBody });
+      const captionText = rawBody.replace(/https?:\/\/[^\s<>"']+/gi, '').trim() ? rawBody : (rawTitle || rawBody);
+      return window.IponSocialEmbeds.renderCompactLinkPreviewHtml(socialEmbeds[0], { caption: captionText });
     }
 
     const urls = rawBody && typeof window?.IponSocialEmbeds?.extractUrls === 'function'
@@ -6969,7 +6971,7 @@
       const cleanUrl = formatCompactUrlText(urls[0]);
       const host = cleanUrl.split('/')[0] || 'Link';
       const caption = rawBody.replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/\s+/g, ' ').trim();
-      const titleText = caption || host;
+      const titleText = caption || rawTitle || host;
       return `<div class="msg-forward-preview is-link">
         <div class="msg-forward-thumb is-link" aria-hidden="true">
           <span class="msg-forward-thumb-fallback">${FWD_LINK_ICON_SVG}</span>
@@ -7014,7 +7016,7 @@
       <div class="msg-forward-preview-copy">
         <span class="msg-forward-preview-kicker">${FWD_QUOTE_ICON_SVG}<span>Message</span></span>
         <strong class="msg-forward-preview-title" title="${escAttr(cleanText)}">${escapeHtml(cleanText.slice(0, 140))}</strong>
-        <small class="msg-forward-preview-sub">Ready to forward</small>
+        <small class="msg-forward-preview-sub">${escapeHtml(fallbackSub)}</small>
       </div>
     </div>`;
   }
@@ -7152,11 +7154,12 @@
       await init(ipon().profile);
     }
     if (!isEligible()) return false;
+    stopActiveConversationMedia({ includeViewer: false });
     ensureDialogsMounted();
     const ws = document.getElementById('msg-workspace-dialog');
     if (!ws?.open) {
       await openWorkspace({ tab: 'chats' });
-    } else if (!state.conversations.length && !state.overview) {
+    } else if (!state.conversationsLoaded || !state.overviewLoaded) {
       await Promise.all([refreshConversations(), refreshOverview()]);
     }
     const dialog = document.getElementById('msg-share-dialog');
@@ -7165,19 +7168,18 @@
 
     const items = collectShareRecipients();
     state.shareSentKeys = new Set();
-    const previewHtml = norm.social && window.IponSocialEmbeds?.renderCompactLinkPreviewHtml
-      ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderCompactLinkPreviewHtml(norm.social, { caption: norm.text })}</div>`
-      : (norm.social && window.IponSocialEmbeds?.renderSocialEmbedCardHtml
-        ? `<div class="msg-share-preview">${window.IponSocialEmbeds.renderSocialEmbedCardHtml(norm.social, { compact: true })}</div>`
-        : '');
+    const previewHtml = renderForwardPreviewHtml({ body: norm.text, title: norm.title }, { fallbackSub: 'Ready to share' });
+    const noteHtml = `<div class="msg-share-note-wrap">
+      <input type="text" id="msg-share-note" class="msg-share-note-input" maxlength="400" placeholder="Add a message (optional)…" autocomplete="off" aria-label="Optional message to include with shared content">
+    </div>`;
     const listHtml = items.length
-      ? `<div class="msg-share-search-wrap">
+      ? `<div class="msg-forward-search-wrap msg-share-search-wrap">
            <input type="search" id="msg-share-search" placeholder="Search people or groups…" autocomplete="off" aria-label="Search chats or people to share with">
          </div>
          <div class="msg-forward-list msg-share-list" id="msg-share-list">${items.map((item) => {
            const shareKey = item.isGroup ? `g:${item.convId}` : `u:${item.userId}`;
            const searchBlob = `${item.name || ''} ${item.sub || ''}`.toLowerCase();
-           return `<button type="button" class="msg-forward-row msg-share-row" data-share-send-user="${escAttr(item.userId)}" data-share-send-conv="${escAttr(item.convId || '')}" data-share-key="${escAttr(shareKey)}" data-share-name="${escAttr(item.name || '')}" data-share-search="${escAttr(searchBlob)}">
+           return `<button type="button" class="msg-forward-row msg-share-row" data-share-send-user="${escAttr(item.userId)}" data-share-send-conv="${escAttr(item.convId || '')}" data-share-key="${escAttr(shareKey)}" data-share-name="${escAttr(item.name || '')}" data-share-search="${escAttr(searchBlob)}" aria-label="Send to ${escAttr(item.name || 'recipient')}">
              ${item.isGroup
                ? groupAvatarHtml(item.conv, 'avatar-sm', { clickable: false, showPresence: false })
                : userAvatarHtml({ id: item.userId, full_name: item.name, avatar_url: item.avatar_url, allow_online_status: false }, 'avatar-sm', { clickable: false, showPresence: false })}
@@ -7193,47 +7195,58 @@
            <span class="msg-forward-status" id="msg-share-status" aria-live="polite">Tap Send to share</span>
            <button type="button" class="button button-primary button-sm msg-forward-done-btn" data-msg-share-close>Done</button>
          </div>`
-      : '<p class="empty-state">Add friends or open conversations first to send shared links.</p>';
+      : `<p class="empty-state">Add friends or open conversations first to send shared links.</p>
+         <div class="msg-forward-footer" id="msg-share-footer">
+           <span class="msg-forward-status" id="msg-share-status" aria-live="polite">No recipients available</span>
+           <button type="button" class="button button-primary button-sm msg-forward-done-btn" data-msg-share-close>Done</button>
+         </div>`;
 
-    body.innerHTML = `${previewHtml}
-      <div class="field msg-share-field">
-        <div class="msg-share-label-row">
-          <label for="msg-share-text">Message</label>
-          <small class="msg-share-count" id="msg-share-count">${norm.text.length} / 2000</small>
-        </div>
-        <textarea id="msg-share-text" class="msg-share-textarea" rows="3" maxlength="2000" placeholder="Add a message or paste a video link…" required>${escapeHtml(norm.text)}</textarea>
-        <p class="field-error msg-field-help" id="msg-share-text-err" aria-live="polite" aria-hidden="true"></p>
-      </div>
-      ${listHtml}`;
+    body.innerHTML = `${previewHtml}${items.length ? noteHtml : ''}${listHtml}`;
+    body.dataset.shareBaseText = norm.text;
     ipon().bindAvatarFallbacks?.(body);
+    body.querySelectorAll?.('.msg-forward-thumb-img').forEach((img) => {
+      img.addEventListener?.('error', () => { img.remove?.(); }, { once: true });
+    });
     window.IponSocialEmbeds?.hydrateVisibleSocialMeta?.(body, resolveSocialEmbedUrl);
     if (!dialog.open) dialog.showModal();
     return true;
   }
 
+  let shareCheckInFlight = false;
+
   async function checkIncomingSharePayload() {
-    let payload = null;
+    if (shareCheckInFlight) return false;
+    if (!initializedProfile && ipon().profile) {
+      await init(ipon().profile);
+    }
+    if (!isEligible()) return false;
+    shareCheckInFlight = true;
     try {
-      if (typeof window !== 'undefined' && window.IponNativeShare && typeof window.IponNativeShare.consumePendingShare === 'function') {
-        const rawNative = window.IponNativeShare.consumePendingShare();
-        if (rawNative) {
-          const parsed = typeof rawNative === 'string' ? JSON.parse(rawNative) : rawNative;
-          if (parsed && (parsed.text || parsed.url || parsed.title)) payload = parsed;
+      let payload = null;
+      try {
+        if (typeof window !== 'undefined' && window.IponNativeShare && typeof window.IponNativeShare.consumePendingShare === 'function') {
+          const rawNative = window.IponNativeShare.consumePendingShare();
+          if (rawNative) {
+            const parsed = typeof rawNative === 'string' ? JSON.parse(rawNative) : rawNative;
+            if (parsed && (parsed.text || parsed.url || parsed.title)) payload = parsed;
+          }
         }
+      } catch { }
+      if (!payload && typeof ipon().consumePendingSharePayload === 'function') {
+        payload = ipon().consumePendingSharePayload();
       }
-    } catch { }
-    if (!payload && typeof ipon().consumePendingSharePayload === 'function') {
-      payload = ipon().consumePendingSharePayload();
+      if (!payload && typeof location !== 'undefined' && location.search) {
+        const sp = new URLSearchParams(location.search);
+        const st = String(sp.get('share_title') || '').trim();
+        const sx = String(sp.get('share_text') || '').trim();
+        const su = String(sp.get('share_url') || '').trim();
+        if (st || sx || su) payload = { title: st, text: sx, url: su };
+      }
+      if (!payload) return false;
+      return await openShareLinkDialog(payload);
+    } finally {
+      shareCheckInFlight = false;
     }
-    if (!payload && typeof location !== 'undefined' && location.search) {
-      const sp = new URLSearchParams(location.search);
-      const st = String(sp.get('share_title') || '').trim();
-      const sx = String(sp.get('share_text') || '').trim();
-      const su = String(sp.get('share_url') || '').trim();
-      if (st || sx || su) payload = { title: st, text: sx, url: su };
-    }
-    if (!payload) return false;
-    return openShareLinkDialog(payload);
   }
 
   async function openPrivacySettingsModal() {
@@ -8918,17 +8931,12 @@
       const shareRow = ev.target.closest?.('[data-share-send-user]');
       if (shareRow) {
         if (shareRow.disabled || shareRow.dataset.shareState === 'sending' || shareRow.dataset.shareState === 'sent') return;
-        const textEl = document.getElementById('msg-share-text');
-        const errEl = document.getElementById('msg-share-text-err');
-        const msgBody = String(textEl?.value || '').trim();
+        const shareBody = document.getElementById('msg-share-body');
+        const noteText = String(document.getElementById('msg-share-note')?.value || '').trim();
+        const baseText = String(shareBody?.dataset?.shareBaseText || '').trim();
+        const msgBody = noteText ? (baseText ? `${noteText}\n${baseText}` : noteText) : baseText;
         if (!msgBody) {
-          if (errEl) {
-            errEl.textContent = 'Enter a message or link before sending.';
-            errEl.classList?.add?.('is-visible');
-            errEl.setAttribute?.('aria-hidden', 'false');
-          }
-          textEl?.setAttribute?.('aria-invalid', 'true');
-          textEl?.focus?.();
+          ipon().toast('Nothing to share.', 'error');
           return;
         }
         shareRow.disabled = true;
@@ -9333,17 +9341,6 @@
         });
         const emptyEl = document.getElementById('msg-share-empty');
         if (emptyEl) emptyEl.hidden = visible > 0;
-      } else if (ev.target?.id === 'msg-share-text') {
-        const len = String(ev.target.value || '').length;
-        const countEl = document.getElementById('msg-share-count');
-        if (countEl) countEl.textContent = `${len} / 2000`;
-        const errEl = document.getElementById('msg-share-text-err');
-        if (errEl && String(ev.target.value || '').trim()) {
-          errEl.textContent = '';
-          errEl.classList?.remove?.('is-visible');
-          errEl.setAttribute?.('aria-hidden', 'true');
-          ev.target.setAttribute?.('aria-invalid', 'false');
-        }
       } else if (ev.target?.id === 'msg-thread-search-input') {
         state.threadSearchQuery = ev.target.value;
         clearTimeout(threadSearchDebounce);
@@ -10551,6 +10548,9 @@
         window.addEventListener('ipon:presence-change', onPresenceChange);
         window.addEventListener('myipon:native-share', () => {
           checkIncomingSharePayload().catch(() => { });
+        });
+        window.addEventListener('myipon:native-resume', () => {
+          if (window.IponNativeShare) checkIncomingSharePayload().catch(() => { });
         });
         window.addEventListener('ipon:profile-updated', (ev) => {
           const updated = ev?.detail;
