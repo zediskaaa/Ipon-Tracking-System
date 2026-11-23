@@ -473,7 +473,7 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   // Messaging HTML pages load social-video-embeds.js before messages.js
   for (const page of ['account.html', 'audit.html', 'budget.html', 'contributions.html', 'dashboard.html', 'expenses.html', 'members.html', 'reports.html', 'requests.html', 'savings.html', 'settings.html', 'user.html', 'withdrawals.html']) {
     const html = read(page);
-    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-18"><\/script>\s*<script src="js\/messages\.js\?v=20261123-16"/, `${page} must load social-video-embeds.js right before messages.js`);
+    assert.match(html, /js\/social-video-embeds\.js\?v=20261123-18"><\/script>\s*<script src="js\/messages\.js\?v=20261123-17"/, `${page} must load social-video-embeds.js right before messages.js`);
   }
 
   // core.js exports share capture, Edge Function resolver, fullscreen Back exit, and browser popstate Back for video viewer
@@ -514,4 +514,146 @@ test('Android Share Sheet, PWA share_target, CSP allowlists, core.js, messages.j
   assert.match(css, /\.msg-social-card\s*\{/);
   assert.match(css, /\.msg-social-close-btn\s*\{[\s\S]*?border-radius:\s*50%/);
   assert.match(css, /\.msg-share-dialog\s*\{/);
+});
+
+test('leaving a conversation, switching chats/tabs, or backgrounding the app stops active chat videos and social video embeds with zero background play', async () => {
+  const messagesJs = read('js/messages.js');
+  assert.match(messagesJs, /function stopActiveConversationMedia\(/);
+
+  const docListeners = new Map();
+  const winListeners = new Map();
+  const wsCloseListeners = [];
+  let pausedCount = 0;
+  let viewerPausedCount = 0;
+  let stopSocialCalls = 0;
+
+  const makeMediaStub = (isViewer = false) => ({
+    paused: false,
+    pause() {
+      this.paused = true;
+      if (isViewer) viewerPausedCount += 1;
+      else pausedCount += 1;
+    }
+  });
+  let threadVideo = makeMediaStub(false);
+  let viewerVideo = makeMediaStub(true);
+
+  const wsDialog = {
+    id: 'msg-workspace-dialog',
+    open: true,
+    addEventListener: (ev, fn) => { if (ev === 'close') wsCloseListeners.push(fn); }
+  };
+  const viewChats = { classList: { toggle: () => { } } };
+  const docStub = {
+    visibilityState: 'visible',
+    documentElement: { dataset: {} },
+    body: { insertAdjacentHTML: () => { } },
+    getElementById: (id) => {
+      if (id === 'msg-workspace-dialog') return wsDialog;
+      if (id === 'msg-view-chats') return viewChats;
+      return null;
+    },
+    querySelector: () => null,
+    querySelectorAll: (sel) => {
+      if (String(sel).includes('#msg-messages-list audio')) return [threadVideo];
+      if (String(sel).includes('#ipon-video-viewer video')) return [viewerVideo];
+      return [];
+    },
+    addEventListener: (ev, fn) => {
+      if (!docListeners.has(ev)) docListeners.set(ev, []);
+      docListeners.get(ev).push(fn);
+    },
+    removeEventListener: () => { }
+  };
+
+  const winStub = {
+    innerWidth: 390,
+    Ipon: {
+      escapeHtml: (s) => String(s ?? ''),
+      friendlyError: (e) => String(e?.message || e),
+      toast: () => { },
+      bindAvatarFallbacks: () => { },
+      syncPresenceDots: () => { },
+      rpc: async () => [],
+      client: null
+    },
+    IponSocialEmbeds: {
+      stopOtherActivePlayers: (_scope, exceptCard) => {
+        if (exceptCard === null) stopSocialCalls += 1;
+      }
+    },
+    addEventListener: (ev, fn) => {
+      if (!winListeners.has(ev)) winListeners.set(ev, []);
+      winListeners.get(ev).push(fn);
+    },
+    removeEventListener: () => { },
+    location: { search: '', href: 'https://example.test/dashboard.html' }
+  };
+  winStub.window = winStub;
+
+  const patched = messagesJs.replace(
+    'window.IponMessages = {',
+    'window.IponMessages = { __seedPlaybackState(convId) { initializedProfile = { id: "u-me", full_name: "Me", role: "MEMBER", status: "ACTIVE" }; state.activeConvId = convId; state.activeThread = { conversation: { conversation_id: convId, kind: "DIRECT" }, messages: [], pinned_messages: [] }; state.mobileShowThread = true; state.tab = "chats"; }, __switchTab(t) { return switchTab(t); }, __clearThread() { return clearActiveThreadSelection(); }, __openConv(id) { return openConversation(id); },'
+  );
+  vm.runInNewContext(patched, {
+    window: winStub,
+    document: docStub,
+    location: winStub.location,
+    Map,
+    Set,
+    URLSearchParams,
+    navigator: {},
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => 0,
+    clearInterval: () => { }
+  });
+
+  const resetMedia = (convId = 'c-1') => {
+    winStub.IponMessages.__seedPlaybackState(convId);
+    threadVideo = makeMediaStub(false);
+    viewerVideo = makeMediaStub(true);
+    pausedCount = 0;
+    viewerPausedCount = 0;
+    stopSocialCalls = 0;
+  };
+
+  // 1) Tapping mobile Back-to-list button stops both video and social embed
+  resetMedia('c-1');
+  for (const fn of docListeners.get('click') || []) {
+    await fn({ target: { closest: (sel) => (sel === '#msg-back-to-list' ? {} : null) } });
+  }
+  assert.ok(pausedCount >= 1 && stopSocialCalls >= 1, '#msg-back-to-list stops active conversation media');
+
+  // 2) Hardware / native Back navigation out of conversation stops media
+  resetMedia('c-1');
+  assert.equal(winStub.IponMessages.handleBackNavigation(), true);
+  assert.ok(pausedCount >= 1 && stopSocialCalls >= 1, 'handleBackNavigation stops active conversation media');
+
+  // 3) Switching to Friends tab stops media
+  resetMedia('c-1');
+  winStub.IponMessages.__switchTab('friends');
+  assert.ok(pausedCount >= 1 && stopSocialCalls >= 1, 'switchTab(friends) stops active conversation media');
+
+  // 4) Switching to a different conversation immediately stops previous conversation media
+  resetMedia('c-1');
+  await winStub.IponMessages.__openConv('c-2').catch(() => { });
+  assert.ok(pausedCount >= 1 && stopSocialCalls >= 1, 'switching conversations stops previous conversation media');
+
+  // 5) Clearing active thread stops media
+  resetMedia('c-1');
+  winStub.IponMessages.__clearThread();
+  assert.ok(pausedCount >= 1 && stopSocialCalls >= 1, 'clearActiveThreadSelection stops active conversation media');
+
+  // 6) App/tab hidden (visibilitychange) and pagehide stop thread media AND maximized video viewer
+  await winStub.IponMessages.init({ id: 'u-me', full_name: 'Me', role: 'MEMBER', status: 'ACTIVE' });
+  resetMedia('c-1');
+  docStub.visibilityState = 'hidden';
+  for (const fn of docListeners.get('visibilitychange') || []) fn();
+  assert.ok(pausedCount >= 1 && viewerPausedCount >= 1 && stopSocialCalls >= 1, 'visibilitychange hidden stops thread + viewer + social embeds');
+
+  resetMedia('c-1');
+  for (const fn of winListeners.get('pagehide') || []) fn();
+  assert.ok(pausedCount >= 1 && viewerPausedCount >= 1 && stopSocialCalls >= 1, 'pagehide stops thread + viewer + social embeds');
 });

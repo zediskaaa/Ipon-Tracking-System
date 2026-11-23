@@ -1173,8 +1173,7 @@
       closeFloatingMenus();
       state.showThreadInfo = false;
       state.threadInfoView = 'root';
-      document.querySelectorAll('#msg-messages-list video, #msg-messages-list audio').forEach((m) => { try { m.pause?.(); } catch { } });
-      window.IponSocialEmbeds?.stopOtherActivePlayers?.(document.getElementById('msg-messages-list'), null);
+      stopActiveConversationMedia({ includeViewer: true });
       if (typeof disconnectTypingChannel === 'function') disconnectTypingChannel();
       clearActiveThreadSelection();
       state.mobileShowThread = false;
@@ -2430,6 +2429,18 @@
     window.IponSocialEmbeds?.stopOtherActivePlayers?.(typeof document !== 'undefined' ? document : null, keepSocialCard);
   }
 
+  function stopActiveConversationMedia({ includeViewer = false } = {}) {
+    document.querySelectorAll('#msg-messages-list audio, #msg-messages-list video, #msg-thread-drawer audio, #msg-thread-drawer video').forEach((el) => {
+      try { el.pause?.(); } catch { }
+    });
+    if (includeViewer) {
+      document.querySelectorAll('#ipon-video-viewer video').forEach((el) => {
+        try { el.pause?.(); } catch { }
+      });
+    }
+    window.IponSocialEmbeds?.stopOtherActivePlayers?.(typeof document !== 'undefined' ? document : null, null);
+  }
+
   function renderVoicePlayerHtml(url, durationSec = 0) {
     const initDur = Number.isFinite(Number(durationSec)) && Number(durationSec) > 0 ? Number(durationSec) : 0;
     const barsHtml = VOICE_WAVE_HEIGHTS.map((h) => `<span class="msg-voice-wave-bar" style="--bar-h:${h}%"></span>`).join('');
@@ -2962,6 +2973,7 @@
     const backgroundRefresh = Boolean(silent || isSameLoadedThread);
 
     if (state.activeConvId && isSwitchingConv) {
+      stopActiveConversationMedia({ includeViewer: true });
       sendTypingBroadcast(false);
       state.threadInfoView = 'root';
       state.vanishError = '';
@@ -7409,6 +7421,7 @@
 
   function clearActiveThreadSelection() {
     syncNativeScreenshotLock(null);
+    stopActiveConversationMedia({ includeViewer: true });
     disconnectTypingChannel();
     state.activeConvId = null;
     state.activeThread = null;
@@ -7454,7 +7467,10 @@
     } else if (resolvedTab === 'chats' && state.chatFilter === 'requests') {
       state.chatFilter = 'inbox';
     }
-    if (resolvedTab !== 'chats' && resolvedTab !== 'requests') syncNativeScreenshotLock(null);
+    if (resolvedTab !== 'chats' && resolvedTab !== 'requests') {
+      stopActiveConversationMedia({ includeViewer: true });
+      syncNativeScreenshotLock(null);
+    }
     if (resolvedTab === 'chats' || resolvedTab === 'requests') {
       state.mobileShowThread = false;
       syncMobilePaneState();
@@ -7478,6 +7494,11 @@
   function syncMobilePaneState() {
     const view = document.getElementById('msg-view-chats');
     if (view) view.classList.toggle('is-mobile-thread', state.mobileShowThread);
+    if (!state.mobileShowThread) {
+      const isCompact = (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && (window.matchMedia('(max-width: 820px)').matches || window.matchMedia('(max-width: 720px)').matches))
+        || (typeof window !== 'undefined' && Number(window.innerWidth) > 0 && Number(window.innerWidth) <= 820);
+      if (isCompact || !state.activeConvId) stopActiveConversationMedia();
+    }
     syncMyThreadPresence();
     if (state.mobileShowThread) {
       ipon().fitVerifiedNameLines?.(view || document);
@@ -8246,7 +8267,7 @@
         }
         return;
       }
-      if (ev.target.closest?.('#msg-back-to-list')) { closeFloatingMenus(); state.mobileShowThread = false; syncMobilePaneState(); return; }
+      if (ev.target.closest?.('#msg-back-to-list')) { closeFloatingMenus(); stopActiveConversationMedia({ includeViewer: true }); state.mobileShowThread = false; syncMobilePaneState(); return; }
       if (ev.target.closest?.('#msg-retry-thread-btn') && state.activeConvId) { await openConversation(state.activeConvId); return; }
 
       const tabBtn = ev.target.closest?.('[data-msg-tab]');
@@ -10460,6 +10481,7 @@
     document.addEventListener('resume', () => { syncForegroundReceipts(); });
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        stopActiveConversationMedia({ includeViewer: true });
         sendTypingBroadcast(false);
         syncMyThreadPresence();
       } else if (document.visibilityState === 'visible') {
@@ -10525,6 +10547,7 @@
       lastSeenTimer = setInterval(pingLastSeen, 60000);
       document.addEventListener('visibilitychange', onVisibilityChange);
       if (typeof window.addEventListener === 'function') {
+        window.addEventListener('pagehide', () => { stopActiveConversationMedia({ includeViewer: true }); });
         window.addEventListener('focus', onWindowFocus);
         window.addEventListener('blur', onWindowBlur);
         window.addEventListener('ipon:presence-change', onPresenceChange);
@@ -10662,6 +10685,7 @@
     }
     if (state.mobileShowThread) {
       closeFloatingMenus();
+      stopActiveConversationMedia({ includeViewer: true });
       state.mobileShowThread = false;
       syncMobilePaneState();
       return true;
