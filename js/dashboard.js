@@ -115,7 +115,6 @@
   const groupNameEl = document.getElementById('dashboard-group-name');
   const groupModeEl = document.getElementById('dashboard-group-mode');
   const groupRoleEl = document.getElementById('dashboard-group-role');
-  const groupGoalBadgeEl = document.getElementById('dashboard-group-goal-badge');
   const groupMetaEl = document.getElementById('dashboard-group-meta');
   const groupSelect = document.getElementById('dashboard-group-select');
   const groupSwitcherWrap = document.getElementById('dashboard-group-switcher-wrap');
@@ -126,7 +125,6 @@
   const groupHubTitle = document.getElementById('group-hub-title');
   const groupHubMode = document.getElementById('group-hub-mode');
   const groupHubRole = document.getElementById('group-hub-role');
-  const groupHubGoalBadge = document.getElementById('group-hub-goal-badge');
   const groupHubMeta = document.getElementById('group-hub-meta');
   const groupHubSwitcherWrap = document.getElementById('group-hub-switcher-wrap');
   const groupHubSelect = document.getElementById('group-hub-select');
@@ -179,20 +177,6 @@
   const inviteForm = document.getElementById('group-invite-form');
   const inviteOnlyRows = document.getElementById('invite-only-rows');
 
-  function syncWorkspaceGoalBadges() {
-    const goalCount = currentGroup ? activeGoalsList.length : 0;
-    const hasGoal = goalCount > 0;
-    const goalTitle = goalCount === 1
-      ? `Active goal: ${activeGoalsList[0]?.title || 'Savings goal'}`
-      : (goalCount > 1 ? `${goalCount} active savings goals` : '');
-    [groupGoalBadgeEl, groupHubGoalBadge].forEach((badge) => {
-      if (!badge) return;
-      badge.hidden = !hasGoal;
-      badge.textContent = 'GOAL';
-      badge.title = goalTitle;
-    });
-  }
-
   function syncGroupHub() {
     if (!currentGroup) return;
     const isSolo = currentGroup.workspace_mode === 'SOLO';
@@ -214,7 +198,6 @@
       groupHubRole.textContent = currentGroup.role || state?.profile?.role || 'ADMIN';
       groupHubRole.classList.remove('is-solo');
     }
-    syncWorkspaceGoalBadges();
     const contributorCount = Number(currentGroup.active_member_count || 0);
     if (groupHubMeta) {
       groupHubMeta.textContent = isSolo
@@ -403,7 +386,6 @@
         groupHubMode.hidden = true;
         groupHubMode.classList.remove('is-solo', 'is-group');
       }
-      syncWorkspaceGoalBadges();
       if (groupMetaEl) groupMetaEl.textContent = 'Start solo savings or create a savings group';
       if (groupSwitcherWrap) groupSwitcherWrap.hidden = true;
       groupIdentityEl?.classList.remove('is-switchable');
@@ -427,7 +409,6 @@
       groupRoleEl.textContent = currentGroup.role || state?.profile?.role || 'MEMBER';
       groupRoleEl.classList.remove('is-solo');
     }
-    syncWorkspaceGoalBadges();
     const contributorCount = Number(currentGroup.active_member_count || 0);
     const metaParts = isSolo
       ? ['Solo savings', 'Personal tracker']
@@ -1038,7 +1019,6 @@
     ['dashboard-members', 'dashboard-paid', 'dashboard-unpaid'].forEach((id) => { document.getElementById(id).textContent = '0'; });
     document.getElementById('dashboard-month-collected').textContent = Ipon.money(0);
     activeGoalsList = [];
-    syncWorkspaceGoalBadges();
     updateDashboardGoalProgress(0);
     renderGoalOptions([]);
     renderCalendar([]);
@@ -1084,7 +1064,7 @@
     const remaining = Math.max(0, target - tracked);
     const isReached = target > 0 && tracked >= target;
 
-    document.getElementById('dashboard-goal-label').textContent = `${targetGoal.title} · Target Progress`;
+    document.getElementById('dashboard-goal-label').textContent = targetGoal.title || 'Savings Goal';
     document.getElementById('dashboard-goal-fraction').textContent = `${Ipon.money(tracked)} / ${Ipon.money(target)} (${pctFormatted})`;
     document.getElementById('dashboard-goal-fill').style.width = `${pctClamped}%`;
     const remEl = document.getElementById('dashboard-goal-remaining');
@@ -1183,7 +1163,6 @@
       });
       Ipon.registerMemberAvatars(memberResult.data || []);
       activeGoalsList = allGoalsResult?.data || [];
-      syncWorkspaceGoalBadges();
       const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
       if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
         currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);

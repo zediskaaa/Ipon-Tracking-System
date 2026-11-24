@@ -6,29 +6,35 @@ import path from 'node:path';
 const root = process.cwd();
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-test('dashboard header and manage hub expose dedicated mode, role, and goal badges', () => {
+test('dashboard header and manage hub show workspace mode and role only, while Goal lives in its own standalone card', () => {
   const html = read('dashboard.html');
   assert.match(
     html,
-    /id="dashboard-group-mode"[^>]*>GROUP<\/span>\s*<span class="group-bar-badge" id="dashboard-group-role">[^<]*<\/span>\s*<span class="group-bar-badge is-goal" id="dashboard-group-goal-badge" hidden>GOAL<\/span>/
+    /id="dashboard-group-mode"[^>]*>GROUP<\/span>\s*<span class="group-bar-badge" id="dashboard-group-role">[^<]*<\/span>\s*<div class="group-switcher-wrap"/
   );
+  assert.doesNotMatch(html, /id="dashboard-group-goal-badge"/);
   assert.match(
     html,
-    /id="group-hub-mode"[^>]*>GROUP<\/span>\s*<span class="group-hub-role" id="group-hub-role">ADMIN<\/span>\s*<span class="group-hub-role is-goal" id="group-hub-goal-badge" hidden>GOAL<\/span>/
+    /id="group-hub-mode"[^>]*>GROUP<\/span>\s*<span class="group-hub-role" id="group-hub-role">ADMIN<\/span>\s*<\/div>/
+  );
+  assert.doesNotMatch(html, /id="group-hub-goal-badge"/);
+  // Standalone Savings Goal card sits outside .summary-card and before .calendar-card with its own GOAL badge
+  assert.match(
+    html,
+    /<\/section>\s*<section class="dashboard-goal-card" id="dashboard-goal-box" hidden aria-label="Savings goal progress">[\s\S]*?<span class="group-bar-badge is-goal" id="dashboard-goal-badge">GOAL<\/span>[\s\S]*?id="dashboard-goal-label"[\s\S]*?href="savings\.html">Manage goals<\/a>[\s\S]*?<\/section>\s*<section class="calendar-card">/
   );
 });
 
-test('dashboard.js syncs SOLO, GROUP + role, and active GOAL badges cleanly', () => {
+test('dashboard.js syncs SOLO and GROUP + role badges cleanly without mixing GOAL into the workspace header', () => {
   const js = read('js/dashboard.js');
-  assert.match(js, /function syncWorkspaceGoalBadges\(\)/);
+  assert.doesNotMatch(js, /dashboard-group-goal-badge|group-hub-goal-badge/);
   assert.match(js, /groupModeEl\.textContent = isSolo \? 'SOLO' : 'GROUP';/);
   assert.match(js, /groupModeEl\.classList\.toggle\('is-solo', isSolo\);/);
   assert.match(js, /groupModeEl\.classList\.toggle\('is-group', !isSolo\);/);
   assert.match(js, /groupRoleEl\.hidden = isSolo;/);
   assert.match(js, /groupHubMode\.textContent = isSolo \? 'SOLO' : 'GROUP';/);
   assert.match(js, /groupHubRole\.hidden = isSolo;/);
-  assert.match(js, /\[groupGoalBadgeEl, groupHubGoalBadge\]\.forEach\(/);
-  assert.match(js, /activeGoalsList = allGoalsResult\?\.data \|\| \[\];\r?\n\s*syncWorkspaceGoalBadges\(\);/);
+  assert.match(js, /document\.getElementById\('dashboard-goal-label'\)\.textContent = targetGoal\.title \|\| 'Savings Goal';/);
 });
 
 test('workspace switcher dropdown labels GROUP workspaces alongside role and applies consistent SOLO/GROUP badge variants', () => {

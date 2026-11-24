@@ -1018,14 +1018,69 @@ html[data-workspace-mode="SOLO"] .summary-breakdown {
   flex-shrink:0;
 }
 
-.summary-card .dashboard-goal-box {
-  grid-column:1 / -1;
-  margin:0 -24px;
-  padding:15px 24px;
-  border:0;
-  border-top:1px solid rgba(20,45,43,.1);
-  border-radius:0;
-  background:rgba(11,52,40,.03);
+.dashboard-goal-card {
+  display:flex;
+  flex-direction:column;
+  padding:18px 24px 20px;
+  border:1px solid rgba(20,45,43,.09);
+  border-radius:18px;
+  background:#fbf7f0;
+  box-shadow:0 8px 26px rgba(20,45,43,.05), 0 1px 3px rgba(20,45,43,.04);
+}
+.dashboard-goal-card .dashboard-goal-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px 14px;
+  margin-bottom:12px;
+}
+.dashboard-goal-title-row {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+  flex-wrap:wrap;
+}
+.dashboard-goal-title {
+  margin:0;
+  color:var(--ink);
+  font:700 clamp(16px,1.7vw,19px)/1.2 "IPON Serif",serif;
+  overflow-wrap:anywhere;
+}
+.dashboard-goal-head-end {
+  display:inline-flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-left:auto;
+}
+.dashboard-goal-head-end strong {
+  font:700 13.5px/1.2 Arial,sans-serif;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+.dashboard-goal-manage-link {
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  padding:5px 12px;
+  border:1px solid rgba(20,45,43,.18);
+  border-radius:999px;
+  background:#fffdf9;
+  color:var(--ink);
+  font:700 12px/1 Arial,sans-serif;
+  text-decoration:none;
+  white-space:nowrap;
+  transition:background-color .15s ease,border-color .15s ease;
+}
+.dashboard-goal-manage-link:hover {
+  background:#f3efe6;
+  border-color:rgba(20,45,43,.34);
+}
+.dashboard-goal-manage-link:focus-visible {
+  outline:2px solid #4384aa;
+  outline-offset:2px;
 }
 
 .status-icon svg {
@@ -1966,7 +2021,7 @@ html[data-workspace-mode="SOLO"] .summary-breakdown {
   .summary-card { grid-template-columns:1fr; gap:16px; padding:20px 22px 0; }
   .summary-breakdown { padding:0; border-left:0; border-top:0; }
   .summary-card .admin-progress { margin:2px -22px 0; }
-  .summary-card .dashboard-goal-box { margin:0 -22px; }
+  .dashboard-goal-card { padding:18px 22px; }
 }
 
 @media (max-width:900px) {
@@ -2017,7 +2072,7 @@ html[data-workspace-mode="SOLO"] .summary-breakdown {
   html[data-workspace-mode="SOLO"] .summary-breakdown { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto; }
   .summary-card .admin-progress { margin:0 -16px 0; }
   .summary-card .admin-progress > div { padding:14px 16px; }
-  .summary-card .dashboard-goal-box { margin:0 -16px; padding:14px 16px; }
+  .dashboard-goal-card { padding:16px; }
   .calendar-header { display:none; }
   .mobile-month-bar { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:6px; margin-bottom:12px; }
   .mobile-month-bar button { min-height:44px; border:1px solid rgba(20,45,43,.2); border-radius:8px; background:#fffdf9; font-size:22px; }
@@ -2104,7 +2159,8 @@ html[data-workspace-mode="SOLO"] .summary-breakdown {
   .summary-card .admin-progress { margin:0 -14px 0; }
   .summary-card .admin-progress > div { padding:12px 14px; }
   .summary-card .admin-progress dd { font-size:20px; }
-  .summary-card .dashboard-goal-box { margin:0 -14px; padding:12px 14px; }
+  .dashboard-goal-card { padding:14px; }
+  .dashboard-goal-head-end { margin-left:0; width:100%; justify-content:space-between; }
   .review-column { padding:0 12px 20px; }
   .review-panel { padding:18px 14px; }
   .review-item { grid-template-columns:30px minmax(0,1fr); }
@@ -2137,6 +2193,7 @@ html[data-theme="dark"] .dashboard-sidebar {
   box-shadow:2px 0 24px rgba(0,0,0,.45);
 }
 html[data-theme="dark"] .summary-card,
+html[data-theme="dark"] .dashboard-goal-card,
 html[data-theme="dark"] .calendar-card,
 html[data-theme="dark"] .review-panel,
 html[data-theme="dark"] .announcement-panel {
@@ -2185,15 +2242,21 @@ html[data-theme="dark"] .summary-card .dashboard-wallet-link:hover {
 html[data-theme="dark"] .summary-group-bar,
 html[data-theme="dark"] .summary-breakdown,
 html[data-theme="dark"] .summary-card .admin-progress,
-html[data-theme="dark"] .summary-card .dashboard-goal-box,
 html[data-theme="dark"] .summary-card .admin-progress > div:nth-child(n+3) {
   border-color:rgba(218,236,227,.14);
 }
 html[data-theme="dark"] .summary-card .admin-progress {
   background:rgba(255,255,255,.03);
 }
-html[data-theme="dark"] .summary-card .dashboard-goal-box {
-  background:rgba(40,122,76,.1);
+html[data-theme="dark"] .dashboard-goal-manage-link {
+  border-color:rgba(164,218,192,.24);
+  background:#182c26;
+  color:#ecf3ef;
+}
+html[data-theme="dark"] .dashboard-goal-manage-link:hover {
+  border-color:rgba(143,210,174,.45);
+  background:#223e36;
+  color:#ffffff;
 }
 html[data-theme="dark"] .group-bar-badge {
   border-color:#2b7f5d;
