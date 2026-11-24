@@ -724,10 +724,24 @@ html[data-shell-role="SUPER_ADMIN"] .dashboard-sidebar .nav-link[data-role] { di
 
 .summary-breakdown.is-solo [data-summary-tile="expenses"],
 .summary-breakdown.is-solo [data-summary-tile="pending"],
+.summary-breakdown.is-goal [data-summary-tile="expenses"],
 html[data-workspace-mode="SOLO"] .summary-breakdown [data-summary-tile="expenses"],
 html[data-workspace-mode="SOLO"] .summary-breakdown [data-summary-tile="pending"],
 .summary-breakdown .breakdown-tile[hidden] {
   display:none;
+}
+
+.summary-breakdown.is-goal:not(.is-solo) [data-summary-tile="pending"] {
+  grid-column:1 / -1;
+}
+
+@container (min-width:560px) {
+  .summary-breakdown.is-goal:not(.is-solo) {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+  .summary-breakdown.is-goal:not(.is-solo) [data-summary-tile="pending"] {
+    grid-column:auto;
+  }
 }
 
 .summary-breakdown.is-solo,
@@ -2138,7 +2152,9 @@ html[data-workspace-mode="SOLO"] .summary-breakdown {
 @media (max-width:340px) {
   .summary-breakdown,
   .summary-breakdown.is-solo,
+  .summary-breakdown.is-goal,
   html[data-workspace-mode="SOLO"] .summary-breakdown { grid-template-columns:1fr; }
+  .summary-breakdown.is-goal:not(.is-solo) [data-summary-tile="pending"] { grid-column:auto; }
 }
 
 @media (max-width:480px) {

@@ -119,8 +119,9 @@ test('dashboard .summary-breakdown markup, scoped CSS, and light/dark tokens mat
   assert.match(css, /\.summary-breakdown \.breakdown-tile-bar b\s*\{[^}]*width:var\(--w,0%\);[^}]*linear-gradient\(90deg,/s);
   assert.match(css, /\.summary-breakdown dt span\s*\{[^}]*display:block;/);
 
-  // Deliberate Solo 2-card layout (Additions + Deductions only; Expenses and Pending hidden)
-  assert.match(css, /\.summary-breakdown\.is-solo \[data-summary-tile="expenses"\],[\s\S]*?\.summary-breakdown\.is-solo \[data-summary-tile="pending"\][^}]*display:none;/s);
+  // Deliberate Goal 3-card layout (no Expenses) and Solo 2-card layout (no Expenses, no Pending)
+  assert.match(css, /\.summary-breakdown\.is-solo \[data-summary-tile="expenses"\],[\s\S]*?\.summary-breakdown\.is-solo \[data-summary-tile="pending"\],[\s\S]*?\.summary-breakdown\.is-goal \[data-summary-tile="expenses"\][^}]*display:none;/s);
+  assert.match(css, /\.summary-breakdown\.is-goal:not\(\.is-solo\) \[data-summary-tile="pending"\]\s*\{\s*grid-column:1 \/ -1;\s*\}/);
   assert.match(css, /\.summary-breakdown\.is-solo,[\s\S]*?grid-template-columns:minmax\(0,1fr\);\s*grid-template-rows:repeat\(2,minmax\(0,1fr\)\);/s);
   assert.match(css, /@media \(max-width:860px\)\s*\{[\s\S]*?\.summary-breakdown\.is-solo,[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/);
 
@@ -188,8 +189,21 @@ test('breakdown runtime renders Group 4-card, Solo 2-card, instant workspace swi
   assert.equal(h.summaryTileEls.additions._dd.dataset.valLen, 'md');
   assert.match(h.summaryTileEls.additions._dd.innerHTML, /<i>₱<\/i><span class="breakdown-val-num">15,000<\/span><span class="breakdown-val-cents">\.00<\/span>/);
 
-  // 2. Immediate switch to Solo mode: hides Expenses and Pending completely, recomputes 2-card shares, preserves historical data untouched
-  h.syncSummaryBreakdownMode(true);
+  // 2. Group workspace with an active Goal selected: hides Expenses only, shows Additions/Deductions/Pending cleanly
+  h.syncSummaryBreakdownMode(false, true);
+  assert.equal(h.summaryBreakdownEl.classList.contains('is-goal'), true);
+  assert.equal(h.summaryBreakdownEl.classList.contains('is-solo'), false);
+  assert.equal(h.summaryTileEls.expenses.hidden, true);
+  assert.equal(h.summaryTileEls.pending.hidden, false);
+  assert.equal(h.summaryTileEls.additions.hidden, false);
+  assert.equal(h.summaryTileEls.deductions.hidden, false);
+  // Visible total = 15000 + 2000 + 1500 = 18500 -> Additions 81%, Deductions 11%, Pending 8%
+  assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '81%');
+  assert.equal(h.summaryTileEls.deductions._bar.style.getPropertyValue('--w'), '11%');
+  assert.equal(h.summaryTileEls.pending._bar.style.getPropertyValue('--w'), '8%');
+
+  // 3. Immediate switch to Solo mode: hides Expenses and Pending completely, recomputes 2-card shares, preserves historical data untouched
+  h.syncSummaryBreakdownMode(true, true);
   assert.equal(h.summaryBreakdownEl.classList.contains('is-solo'), true);
   assert.equal(h.summaryTileEls.expenses.hidden, true);
   assert.equal(h.summaryTileEls.pending.hidden, true);
@@ -203,9 +217,10 @@ test('breakdown runtime renders Group 4-card, Solo 2-card, instant workspace swi
   assert.equal(groupSummary.tracked_savings, 11500);
   assert.equal(groupPending.amount, 1500);
 
-  // 3. Immediate switch back to Group mode restores all 4 cards and original proportions
-  h.syncSummaryBreakdownMode(false);
+  // 4. Immediate switch back to Group (General savings, no Goal) restores all 4 cards and original proportions
+  h.syncSummaryBreakdownMode(false, false);
   assert.equal(h.summaryBreakdownEl.classList.contains('is-solo'), false);
+  assert.equal(h.summaryBreakdownEl.classList.contains('is-goal'), false);
   assert.equal(h.summaryTileEls.expenses.hidden, false);
   assert.equal(h.summaryTileEls.pending.hidden, false);
   assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '75%');

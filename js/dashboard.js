@@ -260,22 +260,30 @@
     return 'No entries';
   }
 
-  function syncSummaryBreakdownMode(isSolo) {
+  function syncSummaryBreakdownMode(isSolo, hasGoal = lastSummaryBreakdownSnapshot?.hasGoal ?? false) {
     const solo = Boolean(isSolo);
-    if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
-    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    const goal = Boolean(hasGoal);
+    if (summaryBreakdownEl) {
+      summaryBreakdownEl.classList.toggle('is-solo', solo);
+      summaryBreakdownEl.classList.toggle('is-goal', goal);
+    }
+    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo || goal;
     if (summaryTileEls.pending) summaryTileEls.pending.hidden = solo;
-    if (lastSummaryBreakdownSnapshot && lastSummaryBreakdownSnapshot.isSolo !== solo) {
-      renderSummaryBreakdown({ ...lastSummaryBreakdownSnapshot, isSolo: solo });
+    if (lastSummaryBreakdownSnapshot && (lastSummaryBreakdownSnapshot.isSolo !== solo || lastSummaryBreakdownSnapshot.hasGoal !== goal)) {
+      renderSummaryBreakdown({ ...lastSummaryBreakdownSnapshot, isSolo: solo, hasGoal: goal });
     }
   }
 
-  function renderSummaryBreakdown({ summary = null, pending = null, isSolo = false, error = false } = {}) {
+  function renderSummaryBreakdown({ summary = null, pending = null, isSolo = false, hasGoal = false, error = false } = {}) {
     const solo = Boolean(isSolo);
-    if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
-    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    const goal = Boolean(hasGoal);
+    if (summaryBreakdownEl) {
+      summaryBreakdownEl.classList.toggle('is-solo', solo);
+      summaryBreakdownEl.classList.toggle('is-goal', goal);
+    }
+    if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo || goal;
     if (summaryTileEls.pending) summaryTileEls.pending.hidden = solo;
-    lastSummaryBreakdownSnapshot = { summary, pending, isSolo: solo, error: Boolean(error) };
+    lastSummaryBreakdownSnapshot = { summary, pending, isSolo: solo, hasGoal: goal, error: Boolean(error) };
 
     const safeSummary = summary || {};
     const safePending = pending || {};
@@ -302,7 +310,7 @@
         amount: Number(safeSummary.total_expenses || 0),
         count: safeSummary.expenses_count,
         hasArchived: Boolean(safeSummary.has_archived_expenses),
-        visible: !solo
+        visible: !solo && !goal
       },
       {
         key: 'pending',
@@ -1052,6 +1060,7 @@
     if (selectedGoalId) {
       targetGoal = activeGoalsList.find((g) => g.id === selectedGoalId);
     }
+    syncSummaryBreakdownMode(currentGroup?.workspace_mode === 'SOLO', Boolean(targetGoal));
     if (!targetGoal) {
       box.hidden = true;
       return;
@@ -1163,6 +1172,8 @@
       });
       Ipon.registerMemberAvatars(memberResult.data || []);
       activeGoalsList = allGoalsResult?.data || [];
+      renderGoalOptions(activeGoalsList);
+      const hasSelectedGoal = Boolean(selectedGoalId && activeGoalsList.some((g) => g.id === selectedGoalId));
       const adminMember = (memberResult.data || []).find((m) => m.id === currentGroup?.member_id || m.id === state?.profile?.member_id);
       if (adminMember && Number(adminMember.monthly_contribution_amount) > 0) {
         currentAdminMonthlyAmount = Number(adminMember.monthly_contribution_amount);
@@ -1178,14 +1189,14 @@
       renderSummaryBreakdown({
         summary,
         pending,
-        isSolo: currentGroup?.workspace_mode === 'SOLO'
+        isSolo: currentGroup?.workspace_mode === 'SOLO',
+        hasGoal: hasSelectedGoal
       });
       const activeIds = new Set((memberResult.data || []).map((m) => m.id));
       const progress = (progressResult.data || []).filter((item) => activeIds.has(item.member_id) || Number(item.paid_amount || 0) > 0);
       const paid = progress.filter((item) => ['PAID', 'OVERPAID'].includes(item.payment_status)).length; const unpaid = progress.filter((item) => ['UNPAID', 'PARTIALLY PAID'].includes(item.payment_status)).length;
       const monthCollected = progress.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
       document.getElementById('dashboard-members').textContent = memberResult.count ?? (memberResult.data?.length || 0); document.getElementById('dashboard-month-collected').textContent = Ipon.money(monthCollected); document.getElementById('dashboard-paid').textContent = paid; document.getElementById('dashboard-unpaid').textContent = unpaid;
-      renderGoalOptions(activeGoalsList);
       if (remindUnpaidBtn) remindUnpaidBtn.hidden = !(unpaid > 0 && ['ADMIN', 'TREASURER'].includes(state.profile?.role));
       populateQuickRecordMembers(memberResult.data || []);
       updateDashboardGoalProgress(summary.tracked_savings ?? 0);
