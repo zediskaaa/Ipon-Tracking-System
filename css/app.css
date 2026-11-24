@@ -1,3 +1,20 @@
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: .18s;
+  animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 :root {
   color-scheme:light;
   --paper:#f4e9dd; --paper-deep:#eadfce; --ink:#142d2b; --ink-strong:#0c2920; --ink-soft:#324841; --muted:#5f655f;

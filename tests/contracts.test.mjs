@@ -764,6 +764,10 @@ test('mobile navigation and data tables do not require horizontal scrolling', ()
   assert.match(dashboardCss, /@media \(max-width:860px\)[\s\S]*?\.record-entry-action\s*\{[^}]*width:100%/i);
   assert.match(core, /function prepareResponsiveTables\(\)/);
   assert.match(core, /cell\.dataset\.label/);
+  assert.match(core, /const navLink = link\.closest\('\.app-nav a, \.record-tabs a'\)[\s\S]*?event\.preventDefault\(\)[\s\S]*?setLoading\(true,[\s\S]*?location\.assign\(url\.href\)[\s\S]*?requestAnimationFrame/);
+  assert.match(css, /@view-transition\s*\{[^}]*navigation:\s*auto/);
+  assert.match(css, /::view-transition-old\(root\)[\s\S]*?::view-transition-new\(root\)[\s\S]*?animation-duration:\s*\.18s/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?::view-transition-old\(root\)[\s\S]*?animation:\s*none/);
   assert.match(css, /html\s*\{[^}]*overflow-x:clip/);
   assert.match(css, /body\s*\{[^}]*overflow-x:clip/);
   assert.doesNotMatch(css, /\.data-table-wrap\s*\{[^}]*overflow-x:\s*auto/i);
@@ -8504,7 +8508,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261124-03/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261124-04/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

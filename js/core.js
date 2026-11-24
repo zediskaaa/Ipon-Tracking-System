@@ -687,6 +687,16 @@
         });
         navLink.classList.add('is-active');
         navLink.setAttribute('aria-current', 'page');
+        event.preventDefault();
+        if (navLoaderTimer) clearTimeout(navLoaderTimer);
+        setLoading(true, `Opening ${navLink.getAttribute('aria-label') || navLink.textContent?.trim() || 'section'}\u2026`);
+        const commitNavigation = () => window.location.assign(url.href);
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(commitNavigation));
+        } else {
+          navLoaderTimer = window.setTimeout(commitNavigation, 0);
+        }
+        return;
       }
       if (navLoaderTimer) clearTimeout(navLoaderTimer);
       navLoaderTimer = window.setTimeout(() => setLoading(true), 220);
