@@ -10516,10 +10516,7 @@
     const name = (isOwnPost && currentProfile.full_name) || item.author_name || (isOwner ? 'Owner' : 'Administrator');
     const avatarUrl = (isOwnPost && currentProfile.avatar_url !== undefined) ? currentProfile.avatar_url : item.author_avatar_url;
     const avatarCircle = avatarMarkup(avatarUrl, name, `announcement-avatar${isOwner ? ' is-owner' : ''}`);
-    const canOpenAuthorProfile = Boolean(item.author_id) && (
-      !isOwner || currentProfile?.role === 'SUPER_ADMIN'
-      || String(currentProfile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL
-    );
+    const canOpenAuthorProfile = Boolean(item.author_id || isOwner);
     const avatarHtml = canOpenAuthorProfile
       ? `<button type="button" class="avatar-presence-wrap announcement-avatar-wrap${isOwner ? ' is-owner-wrap' : ''} announcement-avatar-profile-trigger" data-announcement-profile-item="${escapeHtml(item.id)}" aria-label="View ${escapeHtml(name)} profile">${avatarCircle}</button>`
       : avatarCircle;
@@ -11446,13 +11443,12 @@
 
     const openAnnouncementAuthorProfile = async (button) => {
       const item = items.find((entry) => entry.id === button.dataset.announcementProfileItem);
-      if (!item?.author_id || button.disabled) return;
+      if ((!item?.author_id && item?.author_role !== 'SUPER_ADMIN') || button.disabled) return;
       button.disabled = true;
       button.setAttribute('aria-busy', 'true');
       try {
-        if (item.author_role === 'SUPER_ADMIN' && !item.group_id) {
+        if (item.author_role === 'SUPER_ADMIN') {
           const isCreator = String(currentProfile?.email || '').trim().toLowerCase() === CREATOR_ACCOUNT_EMAIL;
-          if (!isCreator && currentProfile?.role !== 'SUPER_ADMIN') return;
           await openMemberProfileDialog(isCreator ? currentProfile.id : CREATOR_EFFECT_PROFILE_ID, {
             fullName: item.author_name,
             avatarUrl: item.author_avatar_url,

@@ -13731,6 +13731,9 @@ html[data-theme="dark"] .effects-category-field > select:not(.custom-select-nati
   color: #d7e8df;
   font: 600 11px/1.3 Arial, sans-serif;
 }
+.member-profile-effect-tag:first-child {
+  margin-top: 0;
+}
 .effects-panel {
   width: 100%;
   max-width: 340px;
