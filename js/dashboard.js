@@ -281,6 +281,7 @@
     const solo = Boolean(isSolo);
     if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
     if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    if (summaryTileEls.pending) summaryTileEls.pending.hidden = solo;
     if (lastSummaryBreakdownSnapshot && lastSummaryBreakdownSnapshot.isSolo !== solo) {
       renderSummaryBreakdown({ ...lastSummaryBreakdownSnapshot, isSolo: solo });
     }
@@ -290,6 +291,7 @@
     const solo = Boolean(isSolo);
     if (summaryBreakdownEl) summaryBreakdownEl.classList.toggle('is-solo', solo);
     if (summaryTileEls.expenses) summaryTileEls.expenses.hidden = solo;
+    if (summaryTileEls.pending) summaryTileEls.pending.hidden = solo;
     lastSummaryBreakdownSnapshot = { summary, pending, isSolo: solo, error: Boolean(error) };
 
     const safeSummary = summary || {};
@@ -326,7 +328,7 @@
         count: safePending.count,
         hasArchived: false,
         pending: true,
-        visible: true
+        visible: !solo
       }
     ];
 

@@ -119,10 +119,10 @@ test('dashboard .summary-breakdown markup, scoped CSS, and light/dark tokens mat
   assert.match(css, /\.summary-breakdown \.breakdown-tile-bar b\s*\{[^}]*width:var\(--w,0%\);[^}]*linear-gradient\(90deg,/s);
   assert.match(css, /\.summary-breakdown dt span\s*\{[^}]*display:block;/);
 
-  // Deliberate Solo 3-card layout with zero blank fourth slot
-  assert.match(css, /\.summary-breakdown\.is-solo \[data-summary-tile="expenses"\][^}]*display:none;/s);
-  assert.match(css, /\.summary-breakdown\.is-solo \[data-summary-tile="pending"\]\s*\{\s*grid-column:1 \/ -1;\s*\}/);
-  assert.match(css, /@container \(min-width:560px\)\s*\{[\s\S]*?\.summary-breakdown\.is-solo\s*\{\s*grid-template-columns:repeat\(3,minmax\(0,1fr\)\);/);
+  // Deliberate Solo 2-card layout (Additions + Deductions only; Expenses and Pending hidden)
+  assert.match(css, /\.summary-breakdown\.is-solo \[data-summary-tile="expenses"\],[\s\S]*?\.summary-breakdown\.is-solo \[data-summary-tile="pending"\][^}]*display:none;/s);
+  assert.match(css, /\.summary-breakdown\.is-solo,[\s\S]*?grid-template-columns:minmax\(0,1fr\);\s*grid-template-rows:repeat\(2,minmax\(0,1fr\)\);/s);
+  assert.match(css, /@media \(max-width:860px\)\s*\{[\s\S]*?\.summary-breakdown\.is-solo,[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/);
 
   // Mobile and reduced-motion rules
   assert.match(css, /@media \(max-width:520px\)\s*\{[\s\S]*?\.summary-breakdown \.breakdown-tile\s*\{\s*padding:15px 14px;\s*border-radius:18px;\s*\}/);
@@ -156,7 +156,7 @@ test('migration 197 extends get_savings_summary with real entry counts without e
   assert.doesNotMatch(dashboardJs, /get_summary_counts|get_breakdown_counts/);
 });
 
-test('breakdown runtime renders Group 4-card, Solo 3-card, instant workspace switches, zero/large amounts, and error states cleanly', () => {
+test('breakdown runtime renders Group 4-card, Solo 2-card, instant workspace switches, zero/large amounts, and error states cleanly', () => {
   const h = createBreakdownHarness();
 
   // 1. Group workspace: all 4 cards visible, proportional progress bars, real entry counts
@@ -188,25 +188,26 @@ test('breakdown runtime renders Group 4-card, Solo 3-card, instant workspace swi
   assert.equal(h.summaryTileEls.additions._dd.dataset.valLen, 'md');
   assert.match(h.summaryTileEls.additions._dd.innerHTML, /<i>₱<\/i><span class="breakdown-val-num">15,000<\/span><span class="breakdown-val-cents">\.00<\/span>/);
 
-  // 2. Immediate switch to Solo mode: hides Expenses completely, recomputes 3-card shares, preserves historical expenses untouched
+  // 2. Immediate switch to Solo mode: hides Expenses and Pending completely, recomputes 2-card shares, preserves historical data untouched
   h.syncSummaryBreakdownMode(true);
   assert.equal(h.summaryBreakdownEl.classList.contains('is-solo'), true);
   assert.equal(h.summaryTileEls.expenses.hidden, true);
+  assert.equal(h.summaryTileEls.pending.hidden, true);
   assert.equal(h.summaryTileEls.additions.hidden, false);
   assert.equal(h.summaryTileEls.deductions.hidden, false);
-  assert.equal(h.summaryTileEls.pending.hidden, false);
-  // Visible total = 15000 + 2000 + 1500 = 18500 -> Additions 81%, Deductions 11%, Pending 8%
-  assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '81%');
-  assert.equal(h.summaryTileEls.deductions._bar.style.getPropertyValue('--w'), '11%');
-  assert.equal(h.summaryTileEls.pending._bar.style.getPropertyValue('--w'), '8%');
-  // Historical expense data object was NOT mutated or erased
+  // Visible total = 15000 + 2000 = 17000 -> Additions 88%, Deductions 12%
+  assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '88%');
+  assert.equal(h.summaryTileEls.deductions._bar.style.getPropertyValue('--w'), '12%');
+  // Historical expense & pending data objects were NOT mutated or erased
   assert.equal(groupSummary.total_expenses, 1500);
   assert.equal(groupSummary.tracked_savings, 11500);
+  assert.equal(groupPending.amount, 1500);
 
   // 3. Immediate switch back to Group mode restores all 4 cards and original proportions
   h.syncSummaryBreakdownMode(false);
   assert.equal(h.summaryBreakdownEl.classList.contains('is-solo'), false);
   assert.equal(h.summaryTileEls.expenses.hidden, false);
+  assert.equal(h.summaryTileEls.pending.hidden, false);
   assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '75%');
 
   // 4. Zero state, archived-only fallback, omitted-count fallback, and huge peso scaling
@@ -244,4 +245,5 @@ test('breakdown runtime renders Group 4-card, Solo 3-card, instant workspace swi
   assert.equal(h.summaryTileEls.additions._meta.textContent, 'Unavailable');
   assert.equal(h.summaryTileEls.additions._bar.style.getPropertyValue('--w'), '0%');
   assert.equal(h.summaryTileEls.expenses.hidden, true);
+  assert.equal(h.summaryTileEls.pending.hidden, true);
 });
