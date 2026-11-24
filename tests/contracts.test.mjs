@@ -1605,6 +1605,7 @@ test('role-based notifications and device drawer alerts are wired across SQL, SW
   assert.match(core, /dispatchDeviceNotification/);
   assert.match(core, /requestDeviceNotificationPermission/);
   assert.match(core, /scheduleNativeDueReminders/);
+  assert.equal((core.match(/isExactNotification:\s*false/g) || []).length, 3, 'All LocalNotifications.schedule payloads must set isExactNotification: false so Android 13+ never opens Alarms & Reminders');
   assert.match(core, /bindDeviceNotificationControls/);
   assert.match(core, /sync_my_due_reminders/);
   assert.doesNotMatch(accountHtml, /Phone &amp; drawer alerts|data-device-notif-row/);
@@ -8503,7 +8504,7 @@ test('Android MainActivity clears consumed notification_link intent extra and as
   assert.match(mainAct, /setIntent\(intent\);\s*handleNotificationIntent\(intent\);/);
   assert.match(mainAct, /intent\.removeExtra\("notification_link"\);/);
   assert.match(swJs, /ipon-shell-v(?:2[2-9]|[3-9]\d|[1-9]\d{2,})/);
-  assert.match(dashHtml, /js\/core\.js\?v=20261124-02/);
+  assert.match(dashHtml, /js\/core\.js\?v=20261124-03/);
 });
 
 test('Migration 099 and Super Admin Users surface each user actual latest specific activity without exposing financial data', () => {

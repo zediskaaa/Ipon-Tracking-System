@@ -8157,6 +8157,7 @@
             title,
             body,
             channelId: 'myipon_alerts',
+            isExactNotification: false,
             ...(avatarUrl ? { largeIcon: avatarUrl } : {}),
             extra: { link: target, avatar_url: avatarUrl || '' }
           }]
@@ -9002,6 +9003,7 @@
             title: 'Savings goal deposit due',
             body: `Your ${freqLabel} deposit for "${row.goal_title || 'your savings goal'}" is due on ${row.due_date}${amountCopy}.`,
             channelId: 'myipon_alerts',
+            isExactNotification: false,
             schedule: { at: dueDay, allowWhileIdle: true },
             extra: { link: row.link || 'dashboard.html' }
           });
@@ -9019,6 +9021,7 @@
             title: 'Contribution deadline approaching',
             body: `Your ${row.period_label || 'savings'} contribution for ${row.group_name || 'your group'} is due on ${row.due_date}${amountCopy}.`,
             channelId: 'myipon_alerts',
+            isExactNotification: false,
             schedule: { at: triggerAt, allowWhileIdle: true },
             extra: { link }
           });
