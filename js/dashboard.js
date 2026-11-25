@@ -1211,8 +1211,14 @@
       if (!hasSnapshot) {
         renderEmptySnapshot();
         renderSummaryBreakdown({ isSolo: currentGroup?.workspace_mode === 'SOLO', error: true });
-        dataStatus.textContent = 'Dashboard data is unavailable. No financial snapshot could be loaded.';
-        dataStatus.hidden = false;
+        if (dataStatus) {
+          dataStatus.innerHTML = '<span>Dashboard data is unavailable. No financial snapshot could be loaded.</span><button class="button button-secondary button-sm" id="dashboard-retry-btn" type="button">Retry</button>';
+          dataStatus.hidden = false;
+          document.getElementById('dashboard-retry-btn')?.addEventListener('click', () => {
+            dataStatus.hidden = true;
+            load();
+          }, { once: true });
+        }
       } else {
         dataStatus.textContent = '';
         dataStatus.hidden = true;

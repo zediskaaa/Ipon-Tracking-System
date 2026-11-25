@@ -214,7 +214,9 @@ html[data-workspace-mode="NONE"] .record-tabs a[data-group-only] { display:none 
 .inline-error .button { margin-top:4px; }
 .inline-error-actions { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:4px; }
 .form-dialog .inline-error-actions { justify-content:flex-start; }
-.loading-row td { color:var(--muted); font-family:Arial,sans-serif; text-align:center; }
+.loading-row td { color:var(--muted); font-family:Arial,sans-serif; text-align:center; background:linear-gradient(90deg,rgba(20,45,43,.02) 0%,rgba(20,45,43,.07) 50%,rgba(20,45,43,.02) 100%); background-size:220% 100%; animation:accountSyncShimmer 1.35s ease-in-out infinite; }
+html[data-theme="dark"] .loading-row td { background:linear-gradient(90deg,rgba(218,236,227,.03) 0%,rgba(218,236,227,.09) 50%,rgba(218,236,227,.03) 100%); background-size:220% 100%; }
+@media (prefers-reduced-motion:reduce) { .loading-row td { animation:none; } }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .form-grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .field { display:grid; min-width:0; align-content:start; gap:7px; }
@@ -306,10 +308,25 @@ html[data-workspace-mode="NONE"] .record-tabs a[data-group-only] { display:none 
 .toast { position:fixed; inset:auto 24px 24px auto; z-index:260; width:auto; height:auto; max-width:390px; margin:0; border:0; padding:14px 18px; border-radius:10px; background:var(--rail); color:#fff; box-shadow:var(--shadow); font-family:Arial,sans-serif; overflow-wrap:anywhere; word-break:break-word; opacity:0; pointer-events:none; transform:translateY(12px); transition:.2s ease; }
 .toast.is-visible { display:block; opacity:1; transform:none; }
 .toast[data-tone="error"] { background:var(--red); }
-body[data-page]:not(.security-page):not(.is-ready) > :is(.app-layout,.comp-frame) { pointer-events:none; user-select:none; }
-body[data-page]:not(.security-page) .workspace { transition:opacity .16s ease; }
-body[data-page]:not(.security-page):not(.is-ready) .workspace { opacity:0; }
+body[data-page]:not(.security-page):not(.is-ready) :is(.workspace,.dashboard-workspace,.review-column) { pointer-events:none; user-select:none; }
+body[data-page]:not(.security-page) :is(.workspace,.dashboard-workspace) { position:relative; transition:opacity .14s ease; }
+body[data-page]:not(.security-page):not(.is-ready) :is(.workspace,.dashboard-workspace)::before { content:""; position:sticky; top:0; left:0; right:0; display:block; width:100%; height:3px; margin-bottom:-3px; z-index:25; pointer-events:none; border-radius:999px; background:linear-gradient(90deg,transparent 0%,#287a4c 28%,#f2c14e 52%,#287a4c 76%,transparent 100%); background-size:220% 100%; animation:accountSyncShimmer 1.15s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) { body[data-page]:not(.security-page):not(.is-ready) :is(.workspace,.dashboard-workspace)::before { animation:none; background:#287a4c; } }
+body[data-page="account"]:not(.is-ready) .account-page-dialog:not([open]) { display:block; position:relative; margin:0 auto; }
+html[data-shell-role="MEMBER"] body[data-page]:is([data-page="members"],[data-page="settings"],[data-page="audit"],[data-page="super-admin"]):not(.is-ready) .workspace,
+html[data-shell-role="TREASURER"] body[data-page]:is([data-page="members"],[data-page="settings"],[data-page="audit"],[data-page="user"],[data-page="super-admin"]):not(.is-ready) .workspace,
+html[data-shell-role="ADMIN"] body[data-page]:is([data-page="user"],[data-page="super-admin"]):not(.is-ready) .workspace,
+html[data-shell-role="SUPER_ADMIN"] body[data-page]:not([data-page="super-admin"]):not([data-page="account"]):not(.security-page):not(.is-ready) :is(.workspace,.dashboard-workspace,.review-column) { opacity:0; }
+@keyframes ipon-loader-appear { from { opacity:0; } to { opacity:1; } }
 .app-loader { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:rgba(16,43,36,.18); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+body[data-page]:not(.security-page) .app-loader { z-index:175; background:rgba(244,233,221,.22); -webkit-backdrop-filter:none; backdrop-filter:none; pointer-events:none; animation:ipon-loader-appear .18s ease .16s both; }
+html[data-theme="dark"] body[data-page]:not(.security-page) .app-loader { background:rgba(10,24,19,.28); }
+body[data-page]:not(.security-page) .app-loader .loader-sheet { pointer-events:auto; }
+@media (min-width:981px) { body[data-page]:not(.security-page) .app-loader { left:220px; } }
+@media (min-width:721px) and (max-width:980px) { body[data-page]:not(.security-page) .app-loader { left:180px; } }
+@media (max-width:720px) { body[data-page]:not(.security-page) .app-loader { top:126px; } }
+@media (max-width:860px) { body[data-page="dashboard"] .app-loader { left:0; top:126px; } }
+@media (prefers-reduced-motion:reduce) { body[data-page]:not(.security-page) .app-loader { animation:ipon-loader-appear .01s linear .16s both; } }
 .loader-sheet { position:relative; width:max-content; max-width:100%; overflow:hidden; border:1px solid rgba(255,255,255,.55); border-radius:24px; padding:26px 22px 18px; background:linear-gradient(145deg,rgba(255,252,245,.98),rgba(242,230,211,.96)); box-shadow:0 20px 48px rgba(20,45,43,.24),inset 0 1px 0 rgba(255,255,255,.88); text-align:center; --loop:2.6s; --ease:cubic-bezier(.45,0,.2,1); --s:1; }
 .savings-loader { position:relative; width:190px; height:132px; margin:0 auto; isolation:isolate; }
 .piggy-bank { position:absolute; z-index:1; inset:auto 0 0; width:190px; height:132px; overflow:visible; transform-origin:50% 100%; animation:piggy-settle var(--loop) var(--ease) infinite; will-change:transform; }

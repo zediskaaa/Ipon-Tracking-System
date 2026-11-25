@@ -648,7 +648,7 @@
     if (!document.body.classList.contains('security-page')) setLoading(true);
     window.addEventListener('pagehide', (event) => {
       if (navLoaderTimer) { clearTimeout(navLoaderTimer); navLoaderTimer = null; }
-      if (event.persisted) document.documentElement.style.visibility = 'hidden';
+      if (event.persisted && !hasStoredAuthToken()) document.documentElement.style.visibility = 'hidden';
     });
     window.addEventListener('pageshow', async (event) => {
       if (!event.persisted) return;
@@ -674,6 +674,24 @@
         document.documentElement.style.removeProperty('visibility');
       }
     });
+    const prefetchedNavUrls = new Set();
+    const warmNavTarget = (event) => {
+      const navAnchor = event.target?.closest?.('.app-nav a[href], .record-tabs a[href]');
+      if (!navAnchor || !document.head || typeof document.createElement !== 'function') return;
+      try {
+        const targetUrl = new URL(navAnchor.href, window.location.href);
+        if (targetUrl.origin !== window.location.origin || targetUrl.pathname === window.location.pathname) return;
+        const cleanHref = `${targetUrl.pathname}${targetUrl.search}`;
+        if (prefetchedNavUrls.has(cleanHref)) return;
+        prefetchedNavUrls.add(cleanHref);
+        const hint = document.createElement('link');
+        hint.rel = 'prefetch';
+        hint.href = cleanHref;
+        document.head.appendChild?.(hint);
+      } catch { }
+    };
+    document.addEventListener('pointerover', warmNavTarget, { passive: true });
+    document.addEventListener('touchstart', warmNavTarget, { passive: true });
     document.addEventListener('click', (event) => {
       const link = event.target.closest('a[href]');
       if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
@@ -692,7 +710,7 @@
         setLoading(true, `Opening ${navLink.getAttribute('aria-label') || navLink.textContent?.trim() || 'section'}\u2026`);
         const commitNavigation = () => window.location.assign(url.href);
         if (typeof window.requestAnimationFrame === 'function') {
-          window.requestAnimationFrame(() => window.requestAnimationFrame(commitNavigation));
+          window.requestAnimationFrame(commitNavigation);
         } else {
           navLoaderTimer = window.setTimeout(commitNavigation, 0);
         }
@@ -9385,14 +9403,24 @@
     throw lastError;
   }
 
-  function dismissStartupFailure() {
+  function dismissStartupFailure(showInlineFallback = false, fallbackMessage = '') {
     document.getElementById('startup-error')?.remove();
     document.querySelector('.app-layout, .comp-frame, .login-page')?.removeAttribute('inert');
+    if (!showInlineFallback) {
+      document.getElementById('startup-inline-error')?.remove();
+      return;
+    }
+    const host = document.querySelector('.workspace, .dashboard-workspace');
+    if (host && !document.getElementById('startup-inline-error')) {
+      host.insertAdjacentHTML('afterbegin', `<div class="inline-notice" id="startup-inline-error" role="alert"><span>${escapeHtml(fallbackMessage || 'Unable to load this page right now. Check your connection and retry.')}</span><button class="button button-primary button-sm" id="startup-inline-retry" type="button">Retry</button></div>`);
+      document.getElementById('startup-inline-retry')?.addEventListener('click', () => window.location.reload());
+    }
   }
 
   function showStartupFailure(error) {
     if (appInitialized || currentProfile || document.getElementById('startup-error')) return;
     console.warn('Startup initialization failed:', error);
+    document.body.classList.add('is-ready');
     const offline = navigator.onLine === false;
     const sessionProblem = /auth|jwt|refresh token|session/i.test(error?.message || '');
     const message = offline
@@ -9418,9 +9446,42 @@
       </section>`);
     const retry = document.getElementById('startup-retry');
     retry.addEventListener('click', () => window.location.reload());
-    document.getElementById('startup-dismiss')?.addEventListener('click', dismissStartupFailure);
+    document.getElementById('startup-dismiss')?.addEventListener('click', () => dismissStartupFailure(true, message));
     document.getElementById('startup-signout').addEventListener('click', signOut);
     retry.focus();
+  }
+
+  const SESSION_BOOT_CACHE_KEY = 'ipon_session_boot_v1';
+  const SESSION_BOOT_TTL_MS = 90000;
+
+  function readSessionBootCache(expectedUserId) {
+    if (!expectedUserId) return null;
+    try {
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_BOOT_CACHE_KEY) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || String(parsed.userId || '') !== String(expectedUserId)) return null;
+      if (!Number.isFinite(parsed.ts) || Date.now() - parsed.ts > SESSION_BOOT_TTL_MS) return null;
+      if (!parsed.profile || typeof parsed.profile !== 'object' || parsed.profile.status !== 'ACTIVE') return null;
+      return { ...parsed.profile };
+    } catch {
+      return null;
+    }
+  }
+
+  function writeSessionBootCache(profile) {
+    if (!profile?.id || profile.status !== 'ACTIVE') return;
+    try {
+      sessionStorage.setItem(SESSION_BOOT_CACHE_KEY, JSON.stringify({
+        ts: Date.now(),
+        userId: profile.id,
+        profile
+      }));
+    } catch { }
+  }
+
+  function clearSessionBootCache() {
+    try { sessionStorage.removeItem(SESSION_BOOT_CACHE_KEY); } catch { }
   }
 
   function homeForRole(role) {
@@ -9460,6 +9521,59 @@
         watchCrossTabAuth(client, null, { loginPage: options.requireAuth === false });
         setLoading(false);
         return { configured: true, profile: null, session: null };
+      }
+
+      const currentPage = document.body.dataset.page || '';
+      if (options.requireAuth !== false && !options.forceFreshInit && currentPage !== 'mfa' && currentPage !== 'account') {
+        const cachedProfile = readSessionBootCache(session.user?.id);
+        if (cachedProfile && !accountSetupUrl(cachedProfile, session.user)) {
+          const allowedRoles = options.allowedRoles || pageRoles[currentPage] || null;
+          const wrongPanel = cachedProfile.role === 'SUPER_ADMIN' && !['super-admin', 'account'].includes(currentPage);
+          if (wrongPanel || (allowedRoles && !allowedRoles.includes(cachedProfile.role))) {
+            window.location.replace(homeForRole(cachedProfile.role));
+            return { configured: true, profile: null, session, redirecting: true };
+          }
+          currentProfile = cachedProfile;
+          syncWorkspaceMode(cachedProfile.workspace_mode);
+          mountShell(cachedProfile.role);
+          document.querySelector('.app-brand')?.setAttribute('href', homeForRole(cachedProfile.role));
+          renderSidebarUser(cachedProfile);
+          syncProfileAvatars(cachedProfile);
+          syncShellRoleVisibility(cachedProfile.role);
+          watchCrossTabAuth(client, cachedProfile.id);
+          initNotifications(cachedProfile).catch(() => { });
+          appInitialized = true;
+          dismissStartupFailure();
+          schedulePostReadyBoot(() => {
+            (async () => {
+              try {
+                const freshRes = await client.from('profiles')
+                  .select('id,full_name,first_name,middle_name,last_name,contact_number,role,status,member_id,group_id,avatar_url,name_setup_required,notifications_enabled,username,bio,policy_accepted_version,policy_accepted_at,verified_badge_tier,verified_badge_expires_at,verified_badge_message,verified_badge_granted_at,verified_badge_acknowledged_at,card_theme,cover_url,equipped_profile_effect,social_links')
+                  .eq('id', session.user.id)
+                  .single();
+                if (freshRes?.data) {
+                  const nextProfile = { ...cachedProfile, ...freshRes.data, email: freshRes.data.email || session.user.email || cachedProfile.email };
+                  if (nextProfile.status !== 'ACTIVE') {
+                    clearSessionBootCache();
+                    await client.auth.signOut();
+                    window.location.replace('login.html?status=pending');
+                    return;
+                  }
+                  if (nextProfile.role !== cachedProfile.role || nextProfile.group_id !== cachedProfile.group_id) {
+                    clearSessionBootCache();
+                  } else {
+                    currentProfile = nextProfile;
+                    writeSessionBootCache(nextProfile);
+                    renderSidebarUser(nextProfile);
+                    syncProfileAvatars(nextProfile);
+                  }
+                }
+                refreshVerifiedBadgesCache().catch(() => { });
+              } catch (_) { }
+            })();
+          }, 900);
+          return { configured: true, profile: cachedProfile, session };
+        }
       }
 
       const mfaPromise = document.body.dataset.page !== 'mfa'
@@ -9566,9 +9680,11 @@
       }
       const setupUrl = accountSetupUrl(profile, session.user);
       if (setupUrl && document.body.dataset.page !== 'account') {
+        clearSessionBootCache();
         window.location.replace(setupUrl);
         return { configured: true, profile: null, session, redirecting: true };
       }
+      if (!setupUrl) writeSessionBootCache(profile);
       if (options.requireAuth !== false) {
         const allowedRoles = options.allowedRoles || pageRoles[document.body.dataset.page] || null;
         const wrongPanel = profile.role === 'SUPER_ADMIN' && !['super-admin', 'account'].includes(document.body.dataset.page);
@@ -9693,6 +9809,7 @@
       localStorage.removeItem(SHELL_SNAPSHOT_KEY);
       sessionStorage.removeItem(SHELL_AVATAR_KEY);
       localStorage.removeItem(SHELL_AVATAR_KEY);
+      clearSessionBootCache();
       if (document?.documentElement?.dataset) delete document.documentElement.dataset.shellRole;
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sb-') && key.endsWith('-auth-token')) localStorage.removeItem(key);
@@ -10314,6 +10431,7 @@
     if (error) throw error;
     const rpcName = String(name || '');
     if (!READ_ONLY_RPC_RE.test(rpcName)) {
+      if (/group|member|permission|profile|account|role|invite/i.test(rpcName)) clearSessionBootCache();
       notifyLiveSync('data');
     }
     if (RPC_SUCCESS_SOUNDS[rpcName]) {
@@ -16082,6 +16200,7 @@
   window?.addEventListener?.('ipon:profile-updated', (event) => {
     const updated = event?.detail;
     if (!updated || typeof updated !== 'object') return;
+    clearSessionBootCache();
     writeShellSnapshot({
       userId: updated.id,
       role: updated.role,

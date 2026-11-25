@@ -99,13 +99,13 @@ test('representative dropdowns across all pages remain intact and load patched C
     ['contributions.html', /id="record-member-filter"/, /id="record-status-filter"/],
     ['budget.html', /id="cf-expense-cat-filter"/, /id="cf-compare-select"/],
     ['dashboard.html', /id="dashboard-group-select"/, /id="calendar-goal-select"/],
-    ['settings.html', /css\/app\.css\?v=20261124-03/],
-    ['super-admin.html', /css\/app\.css\?v=20261124-03/],
+    ['settings.html', /css\/app\.css\?v=20261125-01/],
+    ['super-admin.html', /css\/app\.css\?v=20261125-01/],
     ['audit.html', /id="audit-table-filter"/, /id="audit-action-filter"/]
   ];
   for (const [file, ...patterns] of expected) {
     const html = read(file);
-    assert.match(html, /css\/app\.css\?v=20261124-03/, `${file} must load updated app.css`);
+    assert.match(html, /css\/app\.css\?v=20261125-01/, `${file} must load updated app.css`);
     for (const pat of patterns) {
       assert.match(html, pat, `${file} missing expected dropdown contract ${pat}`);
     }

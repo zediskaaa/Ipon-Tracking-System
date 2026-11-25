@@ -1,13 +1,28 @@
 'use strict';
 
-const CACHE_NAME = 'ipon-shell-v278';
+const CACHE_NAME = 'ipon-shell-v279';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname) && self.location.protocol !== 'https:';
 const STATIC_ASSETS = [
   'manifest.webmanifest',
   'assets/favicon.svg',
   'assets/icon-192.png',
   'assets/icon-512.png',
+  'dashboard.html',
+  'contributions.html',
+  'withdrawals.html',
+  'expenses.html',
+  'savings.html',
+  'requests.html',
+  'budget.html',
+  'members.html',
+  'reports.html',
+  'audit.html',
+  'settings.html',
+  'account.html',
+  'user.html',
+  'super-admin.html',
   'css/app.css',
+  'css/hero-plates.css',
   'css/tutorial.css',
   'css/cashflow-monitor.css',
   'js/config.js',
@@ -19,7 +34,20 @@ const STATIC_ASSETS = [
   'js/profile-effects-creator.js',
   'js/core.js',
   'js/tutorial.js',
-  'js/cashflow-monitor.js'
+  'js/policy.js',
+  'js/cashflow-monitor.js',
+  'js/dashboard.js',
+  'js/records.js',
+  'js/savings.js',
+  'js/requests.js',
+  'js/budget.js',
+  'js/members.js',
+  'js/reports.js',
+  'js/audit.js',
+  'js/settings.js',
+  'js/account.js',
+  'js/user.js',
+  'js/super-admin.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -46,18 +74,34 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-  const isHtmlRequest = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html');
-  const isStaticAsset = /\.(?:css|js|json|png|jpe?g|webp|svg|woff2?|ttf|webmanifest)$/i.test(url.pathname);
+  const isPinnedCdnAsset = url.origin === 'https://cdn.jsdelivr.net' && /^\/npm\/.+@\d+\.\d+\.\d+\/.*\.js$/i.test(url.pathname);
+  if (url.origin !== self.location.origin && !isPinnedCdnAsset) return;
+  const isHtmlRequest = !isPinnedCdnAsset && (request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html'));
+  const isStaticAsset = /\.(?:css|js|json|png|jpe?g|webp|svg|woff2?|ttf|webmanifest)$/i.test(url.pathname) || isPinnedCdnAsset;
+  const fetchAndCache = () => fetch(isHtmlRequest ? new Request(request, { cache: 'no-store' }) : request)
+    .then((response) => {
+      if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => { });
+      }
+      return response;
+    });
   event.respondWith(
     (isStaticAsset ? caches.match(request) : Promise.resolve(null))
-      .then((hit) => hit || fetch(isHtmlRequest ? new Request(request, { cache: 'no-store' }) : request))
-      .then((response) => {
-        if (response && response.ok && (response.type === 'basic' || response.type === 'cors')) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => { });
-        }
-        return response;
+      .then((hit) => {
+        if (hit) return hit;
+        const networkPromise = fetchAndCache();
+        if (!isHtmlRequest || typeof setTimeout !== 'function') return networkPromise;
+        return caches.match(request, { ignoreSearch: true }).then((cachedShell) => {
+          if (!cachedShell) return networkPromise;
+          let timer = null;
+          return Promise.race([
+            networkPromise.finally(() => { if (timer && typeof clearTimeout === 'function') clearTimeout(timer); }),
+            new Promise((resolve) => {
+              timer = setTimeout(() => resolve(cachedShell), 1800);
+            })
+          ]);
+        });
       })
       .catch(() => caches.match(request).then((hit) => hit || caches.match(request, { ignoreSearch: true })))
   );
